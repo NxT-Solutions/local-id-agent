@@ -1,0 +1,29 @@
+{
+  "name": "@rqc-icu/localid-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "tsc --noEmit",
+    "generate:api": "orval --config orval.config.ts"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@bufbuild/protobuf": "^2.10.2",
+    "orval": "^7.17.0",
+    "typescript": "~6.0.3"
+  }
+}
