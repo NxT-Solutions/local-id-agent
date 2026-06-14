@@ -2,11 +2,14 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { configureLocalIDClient } from "@rqc-icu/localid-client";
 import App from "./App";
+import { getRuntimeConfig } from "./runtime-config";
 import "./App.css";
 
+const { agentUrl, backendUrl } = getRuntimeConfig();
+
 configureLocalIDClient({
-  agentUrl: import.meta.env.VITE_AGENT_URL ?? "http://127.0.0.1:17443",
-  backendUrl: import.meta.env.VITE_BACKEND_URL ?? "http://localhost:8000",
+  agentUrl,
+  backendUrl,
 });
 
 createRoot(document.getElementById("root")!).render(
