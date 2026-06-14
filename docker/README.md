@@ -39,6 +39,19 @@ pnpm run docker:demo
 
 Then open `http://localhost:5173` and click **Authenticate with LocalID**.
 
+## Belgian eID decision table
+
+Use one mode at a time:
+
+| Goal | Command |
+|------|---------|
+| Native app + eID card | `pnpm demo:native-eid` |
+| Browser + eID container | `pnpm demo:docker-eid` |
+
+- `pnpm demo:native-eid` is recommended on macOS because Docker Desktop USB passthrough is unreliable.
+- `pnpm demo:docker-eid` runs everything in containers and serves UI at `http://localhost:5173`.
+- Do not run Tauri and `demo:docker-eid` together.
+
 ## Run modes
 
 ### 1) `demo-mock` (all containerized)
@@ -82,6 +95,12 @@ pnpm run docker:up:host-agent
 
 The frontend defaults to `FRONTEND_AGENT_URL=http://localhost:17443`, so browser traffic still targets the host agent.
 
+For a one-command native desktop orchestration, prefer:
+
+```bash
+LOCALID_PKCS11_PIN=1234 pnpm demo:native-eid
+```
+
 ### 3) `demo-eid-container` (Linux passthrough attempt, Belgian eID config)
 
 Linux-only best effort for USB smartcard reader passthrough:
@@ -94,6 +113,12 @@ Or:
 
 ```bash
 pnpm run docker:up:eid-container
+```
+
+Or use the root orchestration command:
+
+```bash
+LOCALID_PKCS11_PIN=1234 pnpm demo:docker-eid
 ```
 
 Optional environment overrides:

@@ -63,6 +63,50 @@ For host-agent and smartcard-specific flows (Belgium eID / PKCS#11), see `docker
 
 ---
 
+## Belgian eID demo modes (no guesswork)
+
+Run from repo root and choose one mode:
+
+| Goal | Command |
+|------|---------|
+| Native app + eID card (recommended on macOS) | `pnpm demo:native-eid` |
+| Browser + eID container | `pnpm demo:docker-eid` |
+
+### Mode 1: `pnpm demo:native-eid` (recommended on macOS)
+
+- Stops Docker agent containers that could occupy `:17443`.
+- Starts Docker backend on `:8000`.
+- Builds sidecar (unless `--skip-sidecar-build` is passed to the script directly).
+- Launches `pnpm --filter desktop tauri dev` with `LOCALID_PKCS11_PIN` exported.
+- Use the desktop app **Demo** tab for full auth flow.
+
+Example:
+
+```bash
+LOCALID_PKCS11_PIN=1234 pnpm demo:native-eid
+```
+
+### Mode 2: `pnpm demo:docker-eid`
+
+- Runs backend + frontend + `agent-eid` in Docker.
+- Opens browser flow at `http://localhost:5173`.
+- Requires `LOCALID_PKCS11_PIN`.
+- Do not run Tauri at the same time.
+
+Example:
+
+```bash
+LOCALID_PKCS11_PIN=1234 pnpm demo:docker-eid
+```
+
+Stop demo containers:
+
+```bash
+pnpm demo:stop
+```
+
+---
+
 ## How to run
 
 ### 1. Agent only (CLI)
@@ -162,7 +206,7 @@ pnpm run dev:desktop
 # same as: pnpm --filter desktop dev
 ```
 
-You must run the agent separately for UI-only mode:
+`pnpm run dev:desktop` does not start the sidecar. You must run the agent separately for UI-only mode:
 
 ```bash
 cd services/agent && go run ./cmd/localid-agent --config config.example.json
@@ -195,6 +239,9 @@ Run from the **repository root** unless noted.
 | `pnpm run test:coverage` | Go + TS coverage (`test:coverage:go` / `:ts`) |
 | `pnpm run build` | Build client, React example, desktop frontend |
 | `pnpm run build:sidecar` | Compile Go agent for desktop bundle |
+| `pnpm demo:native-eid` | Full native Belgian eID demo orchestration |
+| `pnpm demo:docker-eid` | Full Docker Belgian eID demo orchestration |
+| `pnpm demo:stop` | Stop demo containers and remove orphans |
 | `pnpm run build:react` | Production build of React demo |
 | `pnpm run build:vue` | Production build of Vue demo |
 | `pnpm run build:desktop` | Typecheck + Vite build of desktop UI |
@@ -221,6 +268,7 @@ Run from the **repository root** unless noted.
 |---------|-----|
 | `cargo metadata: No such file or directory` | Install Rust: [rustup.rs](https://rustup.rs/), then `source "$HOME/.cargo/env"` |
 | Agent unreachable in browser/desktop | Start agent: `cd services/agent && go run ./cmd/localid-agent --config config.example.json` |
+| Browser at `:1420` shows `NetworkError when attempting to fetch resource` | `pnpm run dev:desktop` is UI-only and does not start sidecar; use `pnpm demo:native-eid` (or run agent separately) |
 | 403 from `/sign-challenge` | Origin must match `security.allowed_origins` exactly (e.g. `http://localhost:5173` or `tauri://localhost`) |
 | Verify failed in demo | Restart mock backend; challenges expire after 60s and are one-time use |
 | Desktop sidecar won't start | Run `pnpm run build:sidecar` after agent code changes |

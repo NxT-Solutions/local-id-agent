@@ -1,58 +1,125 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$ROOT"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "${ROOT}"
 
-echo "═══════════════════════════════════════════════════════════════"
-echo " LocalID — Native desktop + Belgian eID (macOS recommended)"
-echo "═══════════════════════════════════════════════════════════════"
-echo ""
-echo "This starts:"
-echo "  • Docker mock backend only (:8000)"
-echo "  • Rebuilt Go agent sidecar in the Tauri app (:17443)"
-echo "  • Tauri desktop window (use Demo tab — NOT browser :1420)"
-echo ""
-echo "Stops Docker agents on :17443 to avoid port conflicts."
-echo ""
+usage() {
+  cat <<'EOF'
+Usage: bash scripts/demo-native-eid.sh [--skip-sidecar-build]
 
-if ! command -v docker >/dev/null 2>&1; then
-  echo "error: docker is required for the mock backend container" >&2
+Runs the recommended macOS flow:
+- Stops Docker agent containers on :17443
+- Starts Docker backend on :8000
+- Builds the desktop sidecar (unless --skip-sidecar-build)
+- Launches Tauri desktop with LOCALID_PKCS11_PIN exported
+EOF
+}
+
+require_command() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "Error: required command '$1' is not available." >&2
+    exit 1
+  fi
+}
+
+SKIP_SIDECAR_BUILD="false"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --)
+      shift
+      break
+      ;;
+    --skip-sidecar-build)
+      SKIP_SIDECAR_BUILD="true"
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Error: unknown argument '$1'" >&2
+      usage
+      exit 1
+      ;;
+  esac
+done
+
+echo "============================================================"
+echo " LocalID demo:native-eid"
+echo " Native Tauri desktop + host sidecar + Docker backend only"
+echo "============================================================"
+
+require_command docker
+require_command pnpm
+require_command curl
+
+if ! docker info >/dev/null 2>&1; then
+  echo "Error: Docker is installed but not running." >&2
   exit 1
 fi
 
-if [[ -z "${LOCALID_PKCS11_PIN:-}" ]]; then
-  echo "warning: LOCALID_PKCS11_PIN is not set."
-  echo "         Signing with a real card will fail unless PIN is provided."
-  echo "         Example: LOCALID_PKCS11_PIN=1234 pnpm demo:native-eid"
-  echo ""
-fi
-
-echo "→ Stopping Docker agent containers (free :17443)..."
+echo
+echo "1/5 Stopping Docker agent containers on :17443 (if running)..."
 docker compose stop agent agent-eid agent-pkcs11 2>/dev/null || true
 
-echo "→ Starting Docker backend on :8000..."
+echo "2/5 Starting Docker backend on :8000..."
 docker compose up -d backend
 
-echo "→ Waiting for backend..."
-for _ in $(seq 1 30); do
-  if curl -fsS "http://localhost:8000/localid/challenge" \
-    -X POST -H "Content-Type: application/json" -d '{}' >/dev/null 2>&1; then
+echo "   Waiting for backend readiness..."
+backend_ready="false"
+for _ in {1..30}; do
+  if curl -fsS -X POST "http://127.0.0.1:8000/localid/challenge" \
+    -H "Content-Type: application/json" \
+    -d '{}' >/dev/null 2>&1; then
+    backend_ready="true"
     break
   fi
   sleep 1
 done
 
-if [[ "${SKIP_SIDECAR_BUILD:-}" != "1" ]]; then
-  echo "→ Building agent sidecar binary..."
-  pnpm run build:sidecar
-else
-  echo "→ Skipping sidecar build (SKIP_SIDECAR_BUILD=1)"
+if [[ "${backend_ready}" != "true" ]]; then
+  echo "Error: backend did not become ready on http://127.0.0.1:8000." >&2
+  echo "Run 'docker compose logs backend' for details." >&2
+  exit 1
 fi
 
-echo ""
-echo "→ Launching Tauri desktop..."
-echo "   In the app: Settings → Belgian eID → Save → Demo → Authenticate"
-echo ""
+if command -v lsof >/dev/null 2>&1; then
+  listener_output="$(lsof -nP -iTCP:17443 -sTCP:LISTEN 2>/dev/null || true)"
+  if [[ -n "${listener_output}" ]]; then
+    echo "Error: port 17443 is already in use. Stop the process before running this demo." >&2
+    echo "${listener_output}" >&2
+    exit 1
+  fi
+fi
 
+echo "3/5 Backend is ready and port 17443 is free."
+
+if [[ "${SKIP_SIDECAR_BUILD}" != "true" ]]; then
+  echo "4/5 Building desktop sidecar..."
+  pnpm run build:sidecar
+else
+  echo "4/5 Skipping sidecar build (--skip-sidecar-build)."
+fi
+
+if [[ -z "${LOCALID_PKCS11_PIN:-}" ]]; then
+  if [[ -t 0 ]]; then
+    echo
+    read -r -s -p "Enter LOCALID_PKCS11_PIN: " LOCALID_PKCS11_PIN
+    echo
+  fi
+fi
+
+if [[ -z "${LOCALID_PKCS11_PIN:-}" ]]; then
+  echo "Error: LOCALID_PKCS11_PIN is required for eID signing." >&2
+  echo "Example: LOCALID_PKCS11_PIN=1234 pnpm demo:native-eid" >&2
+  exit 1
+fi
+
+export LOCALID_PKCS11_PIN
+
+echo "5/5 Launching Tauri desktop (foreground)..."
+echo "Use the Desktop app Demo tab for the full flow."
+echo "Note: browser-only mode on :1420 does not auto-start the sidecar."
 exec pnpm --filter desktop tauri dev
