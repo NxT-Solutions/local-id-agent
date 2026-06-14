@@ -28,6 +28,88 @@ bold() {
   printf '\033[1m%s\033[0m\n' "$*"
 }
 
+DESKTOP_CONFIG_PATH="${HOME}/Library/Application Support/icu.rqc.localid-agent/config.json"
+
+reconcile_desktop_native_eid_config() {
+  if [[ ! -f "${DESKTOP_CONFIG_PATH}" ]]; then
+    return 0
+  fi
+
+  local reconcile_status
+  reconcile_status=0
+  python3 - "${DESKTOP_CONFIG_PATH}" <<'PY' || reconcile_status=$?
+import json
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+try:
+    raw = path.read_text(encoding="utf-8")
+    data = json.loads(raw)
+except Exception:
+    raise SystemExit(10)
+
+if not isinstance(data, dict):
+    raise SystemExit(10)
+
+providers = data.get("providers")
+if not isinstance(providers, dict):
+    providers = {}
+    data["providers"] = providers
+
+changed = False
+
+if providers.get("default") != "belgian_eid":
+    providers["default"] = "belgian_eid"
+    changed = True
+
+belgian = providers.get("belgian_eid")
+if not isinstance(belgian, dict):
+    belgian = {}
+    providers["belgian_eid"] = belgian
+    changed = True
+
+if belgian.get("enabled") is not True:
+    belgian["enabled"] = True
+    changed = True
+
+if not changed:
+    raise SystemExit(0)
+
+path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+raise SystemExit(11)
+PY
+
+  case "${reconcile_status}" in
+    0)
+      return 0
+      ;;
+    10)
+      echo
+      bold "Warning: desktop config is invalid JSON:"
+      echo "  ${DESKTOP_CONFIG_PATH}"
+      if [[ -t 0 ]]; then
+        read -r -p "Delete this invalid config and continue with defaults? [y/N] " answer
+        if [[ "${answer}" =~ ^[Yy]$ ]]; then
+          rm -f "${DESKTOP_CONFIG_PATH}"
+          echo "Deleted invalid desktop config; Tauri will recreate it on launch."
+          return 0
+        fi
+      fi
+      echo "Aborting. Fix or remove the file, then run pnpm demo:native-eid again." >&2
+      exit 1
+      ;;
+    11)
+      echo "Adjusted desktop config for native eID (default provider + enabled flag)."
+      return 0
+      ;;
+    *)
+      echo "Error: failed to reconcile desktop config for native eID." >&2
+      exit 1
+      ;;
+  esac
+}
+
 SKIP_SIDECAR_BUILD="false"
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -59,6 +141,7 @@ echo "============================================================"
 require_command docker
 require_command pnpm
 require_command curl
+require_command python3
 
 if ! docker info >/dev/null 2>&1; then
   echo "Error: Docker is installed but not running." >&2
@@ -70,7 +153,10 @@ if [[ -n "${LOCALID_PKCS11_PIN:-}" ]]; then
 fi
 
 echo
-echo "1/5 Stopping Docker demo containers (frontend + agents); keeping backend..."
+echo "1/6 Reconciling desktop provider config for native eID..."
+reconcile_desktop_native_eid_config
+
+echo "2/6 Stopping Docker demo containers (frontend + agents); keeping backend..."
 docker compose stop frontend agent agent-eid agent-pkcs11 2>/dev/null || true
 
 if command -v lsof >/dev/null 2>&1; then
@@ -83,7 +169,7 @@ if command -v lsof >/dev/null 2>&1; then
   fi
 fi
 
-echo "2/5 Starting Docker backend on :8000..."
+echo "3/6 Starting Docker backend on :8000..."
 docker compose up -d backend
 
 echo "   Waiting for backend readiness..."
@@ -113,13 +199,13 @@ if command -v lsof >/dev/null 2>&1; then
   fi
 fi
 
-echo "3/5 Backend is ready and port 17443 is free."
+echo "4/6 Backend is ready and port 17443 is free."
 
 if [[ "${SKIP_SIDECAR_BUILD}" != "true" ]]; then
-  echo "4/5 Building desktop sidecar..."
+  echo "5/6 Building desktop sidecar..."
   pnpm run build:sidecar
 else
-  echo "4/5 Skipping sidecar build (--skip-sidecar-build)."
+  echo "5/6 Skipping sidecar build (--skip-sidecar-build)."
 fi
 
 if [[ -z "${LOCALID_PKCS11_PIN:-}" ]]; then
@@ -138,14 +224,15 @@ fi
 
 export LOCALID_PKCS11_PIN
 
-echo "5/5 Launching Tauri desktop (foreground)..."
+echo "6/6 Launching Tauri desktop (foreground)..."
 echo
 bold "Use the Tauri desktop window, NOT http://localhost:5173"
 echo "  :5173 is the Docker/browser demo (demo:docker-eid). This command opens the native app."
 echo
 echo "In the desktop app:"
-echo "  1. Settings → Belgian eID → Save (if provider still shows mock from a prior run)"
-echo "  2. Demo tab → run the full auth flow"
+echo "  1. Dashboard → confirm health/status update"
+echo "  2. If needed, click Restart agent"
+echo "  3. Demo tab → run the full auth flow"
 echo
 echo "Note: pnpm run dev:desktop (browser :1420) does not auto-start the sidecar."
 exec pnpm --filter desktop tauri dev
