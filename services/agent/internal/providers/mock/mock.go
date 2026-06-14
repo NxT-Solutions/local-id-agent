@@ -17,7 +17,7 @@ import (
 )
 
 // Deterministic dev key and certificate for reproducible mock signing.
-const privateKeyPEM = `-----BEGIN PRIVATE KEY-----
+var privateKeyPEM = `-----BEGIN PRIVATE KEY-----
 MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDWsCtkhApwZBnn
 R1NiTxSYBi1RC0EU8SZIuhrMkJ5vwtGRew4Vc56LrhxBkbZ/Rd+oUT9gv/i6RJGr
 4KZ6vvjrSpIKFUdCRCkQyp6JtzPUDXjs5TxsSSZJiudQZ1A2iO9Co4c6zrQowXA3
@@ -46,7 +46,7 @@ Pwc8sl9Z0lWGKlsc2RBqE2/caXMNqY4FZoRsFKcEIQKBgAJHYnsR0C9wkdemP8ve
 0YiYZq5pwGCTC4NA0jgSdbdP
 -----END PRIVATE KEY-----`
 
-const certificatePEM = `-----BEGIN CERTIFICATE-----
+var certificatePEM = `-----BEGIN CERTIFICATE-----
 MIIDFzCCAf+gAwIBAgIULLOLRJ7XLXMOZNOHAqBL5mdbcFgwDQYJKoZIhvcNAQEL
 BQAwGzEZMBcGA1UEAwwQTG9jYWxJRCBNb2NrIERldjAeFw0yNjA2MTQyMjA0NDla
 Fw0zNjA2MTEyMjA0NDlaMBsxGTAXBgNVBAMMEExvY2FsSUQgTW9jayBEZXYwggEi

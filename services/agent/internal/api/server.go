@@ -20,6 +20,10 @@ const shutdownTimeout = 10 * time.Second
 
 const maxBodySize = 64 << 10 // 64 KB
 
+var shutdownServer = func(server *http.Server, ctx context.Context) error {
+	return server.Shutdown(ctx)
+}
+
 type Server struct {
 	cfg              *config.Config
 	provider         providers.Provider
@@ -77,7 +81,7 @@ func (s *Server) Run(ctx context.Context) error {
 		defer cancel()
 
 		s.logger.Info("shutting down server")
-		if err := s.httpServer.Shutdown(shutdownCtx); err != nil {
+		if err := shutdownServer(s.httpServer, shutdownCtx); err != nil {
 			return err
 		}
 		return nil

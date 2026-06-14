@@ -12,19 +12,27 @@ import (
 //go:embed spec/agent.openapi.yaml
 var specFS embed.FS
 
+var (
+	readSpecFile = func() ([]byte, error) {
+		return specFS.ReadFile("spec/agent.openapi.yaml")
+	}
+	yamlUnmarshal = yaml.Unmarshal
+	jsonMarshal   = json.Marshal
+)
+
 // AgentJSON returns the embedded agent OpenAPI document as JSON bytes.
 func AgentJSON() ([]byte, error) {
-	data, err := specFS.ReadFile("spec/agent.openapi.yaml")
+	data, err := readSpecFile()
 	if err != nil {
 		return nil, fmt.Errorf("read openapi spec: %w", err)
 	}
 
 	var parsed any
-	if err := yaml.Unmarshal(data, &parsed); err != nil {
+	if err := yamlUnmarshal(data, &parsed); err != nil {
 		return nil, fmt.Errorf("parse openapi yaml: %w", err)
 	}
 
-	jsonData, err := json.Marshal(parsed)
+	jsonData, err := jsonMarshal(parsed)
 	if err != nil {
 		return nil, fmt.Errorf("marshal openapi json: %w", err)
 	}
@@ -47,7 +55,7 @@ func ServeAgentJSON(w http.ResponseWriter) error {
 
 // ServeAgentYAML writes the embedded YAML document.
 func ServeAgentYAML(w http.ResponseWriter) error {
-	data, err := specFS.ReadFile("spec/agent.openapi.yaml")
+	data, err := readSpecFile()
 	if err != nil {
 		return err
 	}

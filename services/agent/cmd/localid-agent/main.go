@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -14,35 +16,55 @@ import (
 	"github.com/rqc-icu/localid-agent/services/agent/internal/providers"
 )
 
-func main() {
-	configPath := flag.String("config", "", "path to JSON config file (required)")
-	flag.Parse()
+var (
+	loadConfig    = config.Load
+	setupLogging  = logging.Setup
+	newProvider   = providers.New
+	newServer     = api.NewServer
+	notifyContext = signal.NotifyContext
+	runMain       = run
+	exitMain      = os.Exit
+)
+
+func run(args []string) error {
+	fs := flag.NewFlagSet("localid-agent", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+
+	configPath := fs.String("config", "", "path to JSON config file (required)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
 
 	if *configPath == "" {
-		slog.Error("missing required --config flag")
-		os.Exit(1)
+		return fmt.Errorf("missing required --config flag")
 	}
 
-	cfg, err := config.Load(*configPath)
+	cfg, err := loadConfig(*configPath)
 	if err != nil {
-		slog.Error("failed to load config", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	logger := logging.Setup(cfg.Logging.Level)
+	logger := setupLogging(cfg.Logging.Level)
 
-	provider, err := providers.New(cfg.Providers)
+	provider, err := newProvider(cfg.Providers)
 	if err != nil {
-		logger.Error("failed to create provider", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to create provider: %w", err)
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	ctx, stop := notifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	server := api.NewServer(cfg, provider, logger)
+	server := newServer(cfg, provider, logger)
 	if err := server.Run(ctx); err != nil {
-		logger.Error("server error", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("server error: %w", err)
+	}
+
+	return nil
+}
+
+func main() {
+	if err := runMain(os.Args[1:]); err != nil {
+		slog.Error(err.Error())
+		exitMain(1)
 	}
 }

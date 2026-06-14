@@ -29,6 +29,13 @@ const (
 
 var allowedOrigins = []string{"http://localhost:5173", "http://localhost:5174"}
 
+var (
+	randRead       = rand.Read
+	listenAndServe = http.ListenAndServe
+	runMain        = run
+	logFatal       = log.Fatal
+)
+
 type challengeEntry struct {
 	expiresAt time.Time
 }
@@ -97,11 +104,11 @@ type errorResponse struct {
 }
 
 type server struct {
-	challenges  *challengeCache
-	freshness   *security.ChallengeFreshnessValidator
+	challenges *challengeCache
+	freshness  *security.ChallengeFreshnessValidator
 }
 
-func main() {
+func run() error {
 	s := &server{
 		challenges: newChallengeCache(),
 		freshness:  security.NewChallengeFreshnessValidator(60),
@@ -119,14 +126,18 @@ func main() {
 	}).Handler(mux)
 
 	log.Printf("mock backend listening on %s", listenAddr)
-	if err := http.ListenAndServe(listenAddr, handler); err != nil {
-		log.Fatal(err)
+	return listenAndServe(listenAddr, handler)
+}
+
+func main() {
+	if err := runMain(); err != nil {
+		logFatal(err)
 	}
 }
 
 func (s *server) handleChallenge(w http.ResponseWriter, r *http.Request) {
 	b := make([]byte, challengeBytes)
-	if _, err := rand.Read(b); err != nil {
+	if _, err := randRead(b); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to generate challenge")
 		return
 	}

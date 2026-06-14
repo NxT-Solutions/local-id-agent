@@ -5,6 +5,8 @@ import (
 	"fmt"
 )
 
+var canonicalMarshal = json.Marshal
+
 func marshalCanonical(payload map[string]string) ([]byte, error) {
 	// Keys must appear in alphabetical order: backend, challenge, origin, purpose, timestamp.
 	ordered := struct {
@@ -21,7 +23,7 @@ func marshalCanonical(payload map[string]string) ([]byte, error) {
 		Timestamp: payload["timestamp"],
 	}
 
-	data, err := json.Marshal(ordered)
+	data, err := canonicalMarshal(ordered)
 	if err != nil {
 		return nil, fmt.Errorf("marshal canonical payload: %w", err)
 	}
