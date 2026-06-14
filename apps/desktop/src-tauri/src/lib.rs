@@ -13,6 +13,7 @@ use tauri_plugin_shell::ShellExt;
 const SIDECAR_NAME: &str = "localid-agent";
 const REQUIRED_ALLOWED_ORIGINS: [&str; 2] = ["tauri://localhost", "http://localhost:1420"];
 const REQUIRED_ALLOWED_BACKENDS: [&str; 1] = ["http://localhost:8000"];
+const FALLBACK_PROVIDER: &str = "mock";
 
 struct AgentProcess(Mutex<Option<CommandChild>>);
 
@@ -41,12 +42,12 @@ fn ensure_config(app: &AppHandle) -> Result<PathBuf, String> {
         let template = include_str!("../config.desktop.json");
         std::fs::write(&path, template).map_err(|error| error.to_string())?;
     } else {
-        backfill_desktop_security_allowlists(&path)?;
+        backfill_desktop_config(&path)?;
     }
     Ok(path)
 }
 
-fn backfill_desktop_security_allowlists(path: &PathBuf) -> Result<(), String> {
+fn backfill_desktop_config(path: &PathBuf) -> Result<(), String> {
     let raw = std::fs::read_to_string(path).map_err(|error| error.to_string())?;
     let mut root: serde_json::Value =
         serde_json::from_str(&raw).map_err(|error| error.to_string())?;
@@ -78,7 +79,9 @@ fn backfill_desktop_security_allowlists(path: &PathBuf) -> Result<(), String> {
             .or_insert_with(|| serde_json::json!([]));
         ensure_values_in_array(backends_value, &REQUIRED_ALLOWED_BACKENDS)
     };
-    if !origins_changed && !backends_changed {
+    let provider_changed = ensure_valid_default_provider(root_object);
+
+    if !origins_changed && !backends_changed && !provider_changed {
         return Ok(());
     }
 
@@ -86,6 +89,83 @@ fn backfill_desktop_security_allowlists(path: &PathBuf) -> Result<(), String> {
     std::fs::write(path, format!("{normalized}\n")).map_err(|error| error.to_string())?;
 
     Ok(())
+}
+
+fn ensure_valid_default_provider(root_object: &mut serde_json::Map<String, serde_json::Value>) -> bool {
+    let providers_value = root_object
+        .entry("providers")
+        .or_insert_with(|| serde_json::json!({}));
+    if !providers_value.is_object() {
+        *providers_value = serde_json::json!({});
+    }
+
+    let Some(providers) = providers_value.as_object_mut() else {
+        return false;
+    };
+
+    let default_provider = providers
+        .get("default")
+        .and_then(|value| value.as_str())
+        .unwrap_or(FALLBACK_PROVIDER)
+        .to_string();
+    let mut changed = false;
+
+    let default_enabled = providers
+        .get(&default_provider)
+        .and_then(|value| value.as_object())
+        .and_then(|value| value.get("enabled"))
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false);
+
+    if default_enabled {
+        return false;
+    }
+
+    if default_provider != FALLBACK_PROVIDER {
+        providers.insert(
+            "default".to_string(),
+            serde_json::Value::String(FALLBACK_PROVIDER.to_string()),
+        );
+        changed = true;
+    }
+
+    let fallback_value = providers
+        .entry(FALLBACK_PROVIDER.to_string())
+        .or_insert_with(|| serde_json::json!({}));
+    if !fallback_value.is_object() {
+        *fallback_value = serde_json::json!({});
+        changed = true;
+    }
+
+    if let Some(fallback) = fallback_value.as_object_mut() {
+        let fallback_enabled = fallback
+            .get("enabled")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
+        if !fallback_enabled {
+            fallback.insert("enabled".to_string(), serde_json::Value::Bool(true));
+            changed = true;
+        }
+    }
+
+    changed
+}
+
+fn with_sidecar_rebuild_hint(error: impl ToString) -> String {
+    let message = error.to_string();
+    let lowercase = message.to_lowercase();
+    let looks_like_missing_sidecar = lowercase.contains("sidecar")
+        && (lowercase.contains("not found")
+            || lowercase.contains("no such file")
+            || lowercase.contains("could not find"));
+
+    if !looks_like_missing_sidecar {
+        return message;
+    }
+
+    format!(
+        "{message}. If the sidecar binary is missing or stale, run `pnpm run build:sidecar` from the repo root."
+    )
 }
 
 fn ensure_values_in_array(value: &mut serde_json::Value, required: &[&str]) -> bool {
@@ -114,18 +194,27 @@ fn ensure_values_in_array(value: &mut serde_json::Value, required: &[&str]) -> b
 fn spawn_agent(app: &AppHandle, process: &AgentProcess) -> Result<(), String> {
     let config = ensure_config(app)?;
     let config_arg = config.to_string_lossy().to_string();
+    let pkcs11_pin = std::env::var("LOCALID_PKCS11_PIN")
+        .ok()
+        .filter(|pin| !pin.trim().is_empty());
 
     if let Some(child) = process.0.lock().unwrap().take() {
         let _ = child.kill();
     }
 
-    let (_event_rx, sidecar) = app
+    let mut sidecar_command = app
         .shell()
         .sidecar(SIDECAR_NAME)
-        .map_err(|error| error.to_string())?
-        .args(["--config", &config_arg])
+        .map_err(with_sidecar_rebuild_hint)?;
+
+    sidecar_command = sidecar_command.args(["--config", &config_arg]);
+    if let Some(pin) = pkcs11_pin {
+        sidecar_command = sidecar_command.env("LOCALID_PKCS11_PIN", pin);
+    }
+
+    let (_event_rx, sidecar) = sidecar_command
         .spawn()
-        .map_err(|error| error.to_string())?;
+        .map_err(with_sidecar_rebuild_hint)?;
 
     *process.0.lock().unwrap() = Some(sidecar);
     Ok(())
