@@ -26,7 +26,10 @@
     "docker:down": "docker compose down --remove-orphans",
     "docker:up:host-agent": "docker compose up --build -d backend frontend",
     "docker:up:eid-container": "docker compose --profile demo-eid-container up --build -d backend frontend agent-eid",
-    "docker:up:pkcs11-container": "docker compose --profile demo-pkcs11-container up --build -d backend frontend agent-pkcs11"
+    "docker:up:pkcs11-container": "docker compose --profile demo-pkcs11-container up --build -d backend frontend agent-pkcs11",
+    "demo:stop": "docker compose down --remove-orphans",
+    "demo:native-eid": "bash scripts/demo-native-eid.sh",
+    "demo:docker-eid": "bash scripts/demo-docker-eid.sh"
   },
   "devDependencies": {
     "turbo": "^2.5.4"
