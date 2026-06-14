@@ -6,10 +6,12 @@ import { DashboardPage } from "@/pages/DashboardPage";
 import { DemoPage } from "@/pages/DemoPage";
 import { SetupPage } from "@/pages/SetupPage";
 import { SettingsPage } from "@/pages/SettingsPage";
+import { appFetch } from "@/lib/fetch";
 
 configureLocalIDClient({
   agentUrl: import.meta.env.VITE_AGENT_URL ?? "http://127.0.0.1:17443",
   backendUrl: import.meta.env.VITE_BACKEND_URL ?? "http://localhost:8000",
+  fetchImpl: appFetch,
 });
 
 export default function App() {

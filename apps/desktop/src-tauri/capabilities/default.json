@@ -8,6 +8,15 @@
     "core:window:allow-show",
     "core:window:allow-hide",
     "core:window:allow-set-focus",
+    {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "http://127.0.0.1:17443/**" },
+        { "url": "http://localhost:17443/**" },
+        { "url": "http://localhost:8000/**" },
+        { "url": "http://127.0.0.1:8000/**" }
+      ]
+    },
     "fs:default",
     "fs:allow-read-text-file",
     "fs:allow-write-text-file",
@@ -31,6 +40,16 @@
       ]
     },
     "shell:allow-kill",
-    "shell:allow-spawn"
+    "shell:allow-spawn",
+    "http:allow-fetch",
+    {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "http://127.0.0.1:17443/*" },
+        { "url": "http://localhost:17443/*" },
+        { "url": "http://localhost:8000/*" },
+        { "url": "http://127.0.0.1:8000/*" }
+      ]
+    }
   ]
 }

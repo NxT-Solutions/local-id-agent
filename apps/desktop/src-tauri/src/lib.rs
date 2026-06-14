@@ -11,6 +11,8 @@ use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::ShellExt;
 
 const SIDECAR_NAME: &str = "localid-agent";
+const REQUIRED_ALLOWED_ORIGINS: [&str; 2] = ["tauri://localhost", "http://localhost:1420"];
+const REQUIRED_ALLOWED_BACKENDS: [&str; 1] = ["http://localhost:8000"];
 
 struct AgentProcess(Mutex<Option<CommandChild>>);
 
@@ -38,8 +40,75 @@ fn ensure_config(app: &AppHandle) -> Result<PathBuf, String> {
     if !path.exists() {
         let template = include_str!("../config.desktop.json");
         std::fs::write(&path, template).map_err(|error| error.to_string())?;
+    } else {
+        backfill_desktop_security_allowlists(&path)?;
     }
     Ok(path)
+}
+
+fn backfill_desktop_security_allowlists(path: &PathBuf) -> Result<(), String> {
+    let raw = std::fs::read_to_string(path).map_err(|error| error.to_string())?;
+    let mut root: serde_json::Value =
+        serde_json::from_str(&raw).map_err(|error| error.to_string())?;
+
+    let Some(root_object) = root.as_object_mut() else {
+        return Ok(());
+    };
+
+    let security_value = root_object
+        .entry("security")
+        .or_insert_with(|| serde_json::json!({}));
+    if !security_value.is_object() {
+        return Ok(());
+    }
+
+    let Some(security) = security_value.as_object_mut() else {
+        return Ok(());
+    };
+
+    let origins_changed = {
+        let origins_value = security
+            .entry("allowed_origins")
+            .or_insert_with(|| serde_json::json!([]));
+        ensure_values_in_array(origins_value, &REQUIRED_ALLOWED_ORIGINS)
+    };
+    let backends_changed = {
+        let backends_value = security
+            .entry("allowed_backends")
+            .or_insert_with(|| serde_json::json!([]));
+        ensure_values_in_array(backends_value, &REQUIRED_ALLOWED_BACKENDS)
+    };
+    if !origins_changed && !backends_changed {
+        return Ok(());
+    }
+
+    let normalized = serde_json::to_string_pretty(&root).map_err(|error| error.to_string())?;
+    std::fs::write(path, format!("{normalized}\n")).map_err(|error| error.to_string())?;
+
+    Ok(())
+}
+
+fn ensure_values_in_array(value: &mut serde_json::Value, required: &[&str]) -> bool {
+    if !value.is_array() {
+        *value = serde_json::json!([]);
+    }
+
+    let Some(array) = value.as_array_mut() else {
+        return false;
+    };
+
+    let mut changed = false;
+    for item in required {
+        let exists = array
+            .iter()
+            .any(|existing| existing.as_str().is_some_and(|text| text == *item));
+        if !exists {
+            array.push(serde_json::Value::String((*item).to_string()));
+            changed = true;
+        }
+    }
+
+    changed
 }
 
 fn spawn_agent(app: &AppHandle, process: &AgentProcess) -> Result<(), String> {
@@ -148,6 +217,7 @@ fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_shell::init())
         .manage(AgentProcess(Mutex::new(None)))
         .setup(|app| {
