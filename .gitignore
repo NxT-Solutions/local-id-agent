@@ -1,5 +1,6 @@
 # Binaries
-localid-agent
+/localid-agent
+/mock-backend
 *.exe
 *.exe~
 *.dll
