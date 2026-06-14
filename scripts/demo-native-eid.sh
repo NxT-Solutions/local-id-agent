@@ -9,10 +9,11 @@ usage() {
 Usage: bash scripts/demo-native-eid.sh [--skip-sidecar-build]
 
 Runs the recommended macOS flow:
-- Stops Docker agent containers on :17443
+- Stops Docker demo containers (frontend + agents); keeps backend
 - Starts Docker backend on :8000
 - Builds the desktop sidecar (unless --skip-sidecar-build)
-- Launches Tauri desktop with LOCALID_PKCS11_PIN exported
+- Launches Tauri desktop (NOT http://localhost:5173)
+- Exports LOCALID_PKCS11_PIN when set in the environment
 EOF
 }
 
@@ -21,6 +22,10 @@ require_command() {
     echo "Error: required command '$1' is not available." >&2
     exit 1
   fi
+}
+
+bold() {
+  printf '\033[1m%s\033[0m\n' "$*"
 }
 
 SKIP_SIDECAR_BUILD="false"
@@ -60,9 +65,23 @@ if ! docker info >/dev/null 2>&1; then
   exit 1
 fi
 
+if [[ -n "${LOCALID_PKCS11_PIN:-}" ]]; then
+  export LOCALID_PKCS11_PIN
+fi
+
 echo
-echo "1/5 Stopping Docker agent containers on :17443 (if running)..."
-docker compose stop agent agent-eid agent-pkcs11 2>/dev/null || true
+echo "1/5 Stopping Docker demo containers (frontend + agents); keeping backend..."
+docker compose stop frontend agent agent-eid agent-pkcs11 2>/dev/null || true
+
+if command -v lsof >/dev/null 2>&1; then
+  frontend_listener="$(lsof -nP -iTCP:5173 -sTCP:LISTEN 2>/dev/null || true)"
+  if [[ -n "${frontend_listener}" ]]; then
+    echo
+    bold "Note: something is still listening on :5173 (often a stale Docker frontend)."
+    echo "Close http://localhost:5173 browser tabs — this demo uses the Tauri desktop window."
+    echo "${frontend_listener}" >&2
+  fi
+fi
 
 echo "2/5 Starting Docker backend on :8000..."
 docker compose up -d backend
@@ -120,6 +139,13 @@ fi
 export LOCALID_PKCS11_PIN
 
 echo "5/5 Launching Tauri desktop (foreground)..."
-echo "Use the Desktop app Demo tab for the full flow."
-echo "Note: browser-only mode on :1420 does not auto-start the sidecar."
+echo
+bold "Use the Tauri desktop window, NOT http://localhost:5173"
+echo "  :5173 is the Docker/browser demo (demo:docker-eid). This command opens the native app."
+echo
+echo "In the desktop app:"
+echo "  1. Settings → Belgian eID → Save (if provider still shows mock from a prior run)"
+echo "  2. Demo tab → run the full auth flow"
+echo
+echo "Note: pnpm run dev:desktop (browser :1420) does not auto-start the sidecar."
 exec pnpm --filter desktop tauri dev

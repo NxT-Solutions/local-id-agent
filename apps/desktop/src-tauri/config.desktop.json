@@ -18,7 +18,7 @@
     "challenge_max_age_seconds": 60
   },
   "providers": {
-    "default": "mock",
+    "default": "belgian_eid",
     "mock": {
       "enabled": true
     },
@@ -30,7 +30,7 @@
       "pin_prompt": "terminal"
     },
     "belgian_eid": {
-      "enabled": false,
+      "enabled": true,
       "pkcs11_module_path": "auto"
     }
   },
