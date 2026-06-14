@@ -167,6 +167,11 @@ Troubleshooting:
 - If `/status` stays `ready=false`, check container logs and validate module path + `pcscd` socket mount.
 - If signing fails with PIN errors, export `LOCALID_PKCS11_PIN` before starting compose.
 - If module loading fails, pass an explicit module path in config or `LOCALID_BEID_PKCS11_MODULE`.
+- If frontend build fails with workspace install errors like `ENOENT ... apps/desktop/node_modules/esbuild`, rebuild the frontend image from current Dockerfiles (`docker compose build --no-cache frontend`). The frontend Docker build is scoped to `examples/react` + `packages/localid-client` and should not install desktop dependencies.
+- If Docker reports `input/output error` during `apt`, Go compile, or BuildKit metadata writes, this is usually Docker storage corruption or host disk pressure (not a LocalID code issue):
+  - Check free space on host and Docker Desktop disk image.
+  - Restart Docker Desktop (or Docker daemon on Linux).
+  - Run `docker system prune` (or `docker system prune -a --volumes` if you can remove all unused images/volumes) and retry the build.
 
 OS caveats:
 
