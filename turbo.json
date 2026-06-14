@@ -1,0 +1,37 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "tasks": {
+    "//#generate": {
+      "cache": false,
+      "inputs": ["proto/**", "buf.yaml", "buf.gen.yaml"],
+      "outputs": [
+        "services/agent/internal/protocol/pb/**",
+        "packages/localid-client/src/generated/**"
+      ]
+    },
+    "//#generate:api": {
+      "cache": false,
+      "inputs": ["openapi/**", "packages/localid-client/orval.config.ts"],
+      "outputs": [
+        "packages/localid-client/src/openapi/**",
+        "services/agent/internal/openapi/spec/**"
+      ]
+    },
+    "//#test:go": {
+      "dependsOn": ["//#generate"],
+      "cache": false
+    },
+    "build": {
+      "dependsOn": ["^build", "//#generate"],
+      "outputs": ["dist/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "test": {
+      "dependsOn": ["//#generate"],
+      "cache": false
+    }
+  }
+}

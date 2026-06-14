@@ -1,0 +1,25 @@
+{
+  "name": "localid-agent-monorepo",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "scripts": {
+    "generate": "buf generate",
+    "sync:openapi": "bash scripts/sync-openapi.sh",
+    "generate:api": "bash scripts/sync-openapi.sh && pnpm --filter @rqc-icu/localid-client generate:api",
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "test": "turbo run //#test:go test",
+    "test:go": "cd services/agent && go test ./...",
+    "dev:react": "turbo run dev --filter=localid-react-example",
+    "dev:vue": "turbo run dev --filter=localid-vue-example",
+    "dev:desktop": "turbo run dev --filter=desktop",
+    "build:client": "turbo run build --filter=@rqc-icu/localid-client",
+    "build:react": "turbo run build --filter=localid-react-example",
+    "build:vue": "turbo run build --filter=localid-vue-example",
+    "build:desktop": "turbo run build --filter=desktop",
+    "build:sidecar": "bash scripts/build-agent-sidecar.sh"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.4"
+  }
+}
