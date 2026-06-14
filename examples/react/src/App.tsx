@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import { checkAgentReadiness, signChallenge } from "./lib/agent";
-import { fetchChallenge, verifyProof } from "./lib/backend";
-import { BACKEND_URL } from "./lib/config";
-import type { AgentReadiness, AuthState } from "./lib/types";
+import {
+  checkAgentReadiness,
+  getBackendUrl,
+  signChallenge,
+  fetchChallenge,
+  verifyProof,
+} from "@rqc-icu/localid-client";
+import type { AgentReadiness, AuthState } from "@rqc-icu/localid-client";
 
 function App() {
   const [agent, setAgent] = useState<AgentReadiness | null>(null);
@@ -28,7 +32,7 @@ function App() {
 
     try {
       const origin = window.location.origin;
-      const backend = BACKEND_URL;
+      const backend = getBackendUrl();
 
       const { challenge } = await fetchChallenge(backend);
       const proof = await signChallenge({
