@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchHealth, fetchStatus } from "@rqc-icu/localid-client";
 import type { HealthResponse, StatusResponse } from "@rqc-icu/localid-client";
 import { RefreshCw, RotateCcw } from "lucide-react";
@@ -20,8 +20,14 @@ export function DashboardPage() {
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [restarting, setRestarting] = useState(false);
+  const refreshInFlight = useRef(false);
 
   const refresh = useCallback(async () => {
+    if (refreshInFlight.current) {
+      return;
+    }
+    refreshInFlight.current = true;
+
     try {
       const [healthResult, statusResult] = await Promise.all([
         fetchHealth(),
@@ -34,13 +40,38 @@ export function DashboardPage() {
       setHealth(null);
       setStatus(null);
       setError(err instanceof Error ? err.message : "Agent unreachable");
+    } finally {
+      refreshInFlight.current = false;
     }
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    let timer: number | null = null;
+
+    const scheduleNext = () => {
+      timer = window.setTimeout(() => {
+        void runPoll();
+      }, POLL_INTERVAL_MS);
+    };
+
+    const runPoll = async () => {
+      if (cancelled) return;
+      await refresh();
+      if (!cancelled) {
+        scheduleNext();
+      }
+    };
+
     void refresh();
-    const timer = window.setInterval(() => void refresh(), POLL_INTERVAL_MS);
-    return () => window.clearInterval(timer);
+    scheduleNext();
+
+    return () => {
+      cancelled = true;
+      if (timer !== null) {
+        window.clearTimeout(timer);
+      }
+    };
   }, [refresh]);
 
   async function handleRestart() {
