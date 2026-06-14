@@ -1,93 +1,262 @@
 # LocalID Agent
 
-LocalID Agent is a localhost identity bridge for web applications.
+Localhost identity bridge for web applications — sign backend challenges with a local smartcard, eID, or PKCS#11 device without exposing private keys to the browser.
 
-It lets a browser frontend request a cryptographic proof from a local smartcard, eID card, or PKCS#11 device without giving the web app direct access to private keys.
+The agent does **not** issue login tokens. Your backend verifies the signature and owns the session.
 
-The agent does not authenticate users by itself and does not issue sessions or tokens. Your backend remains the source of truth.
+## Repository layout
+
+```
+services/agent/              Go agent + mock backend
+packages/localid-client/       Shared TypeScript client (generated from proto)
+apps/desktop/                Tauri 2 desktop app (React + shadcn)
+examples/react/              React 19 browser demo
+examples/vue/                Vue 3 browser demo
+examples/fastapi/            Python FastAPI backend
+examples/laravel/            PHP Laravel backend
+proto/                       Protobuf API contract (Go + TS codegen)
+openapi/                     OpenAPI specs (agent + backend; Orval input)
+docs/                        Detailed guides
+```
+
+---
 
 ## Prerequisites
 
-- Go 1.25 or newer
+Install what you need for the parts you want to run:
 
-## Quick start
+| Tool | Required for | Install |
+|------|----------------|---------|
+| **Go 1.25+** | Agent, mock backend, sidecar build | [go.dev/dl](https://go.dev/dl/) |
+| **pnpm 10+** & **Node.js 20+** | React/Vue examples, desktop UI | `npm i -g pnpm` |
+| **Python 3.12+** | FastAPI example | [python.org](https://www.python.org/) |
+| **PHP 8.2+** & **Composer** | Laravel example | [getcomposer.org](https://getcomposer.org/) |
+| **Buf CLI** | Regenerating types from `proto/` | `brew install bufbuild/buf/buf` |
+| **Rust** ([rustup](https://rustup.rs/)) | Full desktop app (`tauri dev`) | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` |
+| **Xcode CLT** (macOS) | Tauri native build | `xcode-select --install` |
+
+> **Desktop app:** `pnpm run dev:desktop` runs **Vite only** (browser UI). The native window, system tray, and bundled agent require Rust and `pnpm --filter desktop tauri dev`.
+
+---
+
+## First-time setup
+
+From the repository root:
 
 ```bash
+pnpm install
+pnpm generate    # optional: regenerate Go + TS from proto/ (needs Buf)
+pnpm generate:api # optional: regenerate Orval clients from openapi/
+```
+
+---
+
+## How to run
+
+### 1. Agent only (CLI)
+
+Starts the localhost signing service on `127.0.0.1:17443`.
+
+```bash
+cd services/agent
 go run ./cmd/localid-agent --config config.example.json
 ```
 
-The agent binds to `127.0.0.1:17443` by default.
-
-## Smoke tests
+Smoke test:
 
 ```bash
 curl http://127.0.0.1:17443/health
 curl http://127.0.0.1:17443/status
-curl -X POST http://127.0.0.1:17443/sign-challenge \
-  -H "Origin: http://localhost:5173" \
-  -H "Content-Type: application/json" \
-  -d '{"challenge":"YWJj","backend":"http://localhost:8000","purpose":"login","origin":"http://localhost:5173"}'
+curl http://127.0.0.1:17443/openapi.json   # when server.dev_mode is true
 ```
 
-## Configuration
+With `server.dev_mode: true` (default in `config.example.json`), the agent also serves its OpenAPI document at `GET /openapi.json` and `GET /openapi.yaml`. Disable in production.
 
-Copy `config.example.json` and adjust:
+More: [docs/agent-config.md](docs/agent-config.md)
 
-- `server.host` — defaults to `127.0.0.1`; binding to `0.0.0.0` requires `server.allow_remote_bind: true`
-- `security.allowed_origins` — exact browser origins permitted to call the agent
-- `security.allowed_backends` — exact backend URLs whose challenges may be signed
-- `providers.default` — `mock` for development (PKCS#11 and Belgian eID are stubs in M1–3)
+---
 
-## React example (M4)
+### 2. Browser demos (React or Vue)
 
-End-to-end browser demo: backend challenge → agent signature → backend verification.
-
-Start three terminals:
+Full auth loop: backend challenge → agent signature → backend verify. **Three terminals:**
 
 **Terminal 1 — agent**
 
 ```bash
+cd services/agent
 go run ./cmd/localid-agent --config config.example.json
 ```
 
-**Terminal 2 — mock backend**
+**Terminal 2 — backend** (`:8000`, pick one)
 
 ```bash
-go run ./examples/mock-backend
+# Go mock
+cd services/agent && go run ./cmd/mock-backend
+
+# FastAPI
+cd examples/fastapi && uvicorn app.main:app --reload --port 8000
+
+# Laravel
+cd examples/laravel && php artisan serve --port=8000
 ```
 
-**Terminal 3 — React app**
+**Terminal 3 — frontend**
 
 ```bash
-cd examples/react
-cp .env.example .env
-pnpm install
-pnpm run dev
+pnpm run dev:react   # http://localhost:5173
+# or
+pnpm run dev:vue     # http://localhost:5174
 ```
 
-Open `http://localhost:5173`, confirm the agent status is ready, then click **Authenticate with LocalID**. On success you should see **Mock Dev User**.
+Click **Authenticate with LocalID** → expect **Mock Dev User**.
 
-The mock backend on `:8000` mirrors the future Laravel M5 `/localid/*` contract. Point `VITE_BACKEND_URL` at Laravel when M5 lands; the React client should need no changes.
+See [examples/README.md](examples/README.md) for setup details per stack.
 
-See [`examples/react/README.md`](examples/react/README.md) for frontend-only details.
+---
 
-## Development
+### 3. Desktop app (Tauri)
+
+Native cross-platform app. Bundles the Go agent as a sidecar, system tray, settings UI.
+
+**One-time:** build the Go sidecar binary for your OS:
 
 ```bash
-go test ./...
-go build -o localid-agent ./cmd/localid-agent
+pnpm run build:sidecar
 ```
 
-## Security notes
+Output: `apps/desktop/src-tauri/binaries/localid-agent-<target-triple>`  
+Re-run after changing agent Go code.
 
-- Origin and backend values are validated with exact string matching (no wildcards).
-- The agent signs a canonical JSON payload (not the raw challenge alone).
-- PINs, private keys, and full signatures are never logged.
+**Full desktop dev** (window + tray + sidecar):
 
-## API
+```bash
+pnpm --filter desktop tauri dev
+```
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/health` | GET | Agent liveness |
-| `/status` | GET | Active provider status |
-| `/sign-challenge` | POST | Sign a backend challenge with the configured provider |
+- UI: `http://localhost:1420`
+- First run: copies desktop config to OS app data dir
+- Routes: Dashboard `/`, Settings `/settings`, About `/about`, Auth demo `/demo`
+
+**Auth demo page** also needs the mock backend:
+
+```bash
+cd services/agent && go run ./cmd/mock-backend
+```
+
+**UI-only dev** (no Rust, no tray, no sidecar — browser at `:1420`):
+
+```bash
+pnpm run dev:desktop
+# same as: pnpm --filter desktop dev
+```
+
+You must run the agent separately for UI-only mode:
+
+```bash
+cd services/agent && go run ./cmd/localid-agent --config config.example.json
+```
+
+**Production build:**
+
+```bash
+pnpm run build:sidecar
+pnpm --filter desktop tauri build
+```
+
+Bundles: `apps/desktop/src-tauri/target/release/bundle/`
+
+More: [docs/desktop.md](docs/desktop.md)
+
+---
+
+## Command reference
+
+Run from the **repository root** unless noted.
+
+| Command | What it does |
+|---------|----------------|
+| `pnpm install` | Install all JS workspace dependencies |
+| `pnpm generate` | `buf generate` — Go + TS types from `proto/` |
+| `pnpm generate:api` | Sync OpenAPI spec + Orval clients in `localid-client` |
+| `pnpm run test` | Go tests + TypeScript checks (all packages) |
+| `pnpm run test:go` | `go test ./...` in `services/agent` |
+| `pnpm run build` | Build client, React example, desktop frontend |
+| `pnpm run build:sidecar` | Compile Go agent for desktop bundle |
+| `pnpm run build:react` | Production build of React demo |
+| `pnpm run build:vue` | Production build of Vue demo |
+| `pnpm run build:desktop` | Typecheck + Vite build of desktop UI |
+| `pnpm run dev:react` | React demo dev server (`:5173`) |
+| `pnpm run dev:vue` | Vue demo dev server (`:5174`) |
+| `pnpm run dev:desktop` | Desktop **UI only** via Vite (`:1420`) |
+| `pnpm --filter desktop tauri dev` | **Full** desktop app (needs Rust) |
+| `pnpm --filter desktop tauri build` | Desktop installer/bundle (needs Rust) |
+
+### Go (from `services/agent/`)
+
+| Command | What it does |
+|---------|----------------|
+| `go run ./cmd/localid-agent --config config.example.json` | Start agent |
+| `go run ./cmd/mock-backend` | Start mock backend on `:8000` |
+| `go test ./...` | Run agent tests |
+| `go build -o localid-agent ./cmd/localid-agent` | Build agent binary |
+
+---
+
+## Troubleshooting
+
+| Problem | Fix |
+|---------|-----|
+| `cargo metadata: No such file or directory` | Install Rust: [rustup.rs](https://rustup.rs/), then `source "$HOME/.cargo/env"` |
+| Agent unreachable in browser/desktop | Start agent: `cd services/agent && go run ./cmd/localid-agent --config config.example.json` |
+| 403 from `/sign-challenge` | Origin must match `security.allowed_origins` exactly (e.g. `http://localhost:5173` or `tauri://localhost`) |
+| Verify failed in demo | Restart mock backend; challenges expire after 60s and are one-time use |
+| Desktop sidecar won't start | Run `pnpm run build:sidecar` after agent code changes |
+| Types out of sync | Run `pnpm generate` after editing `proto/` |
+| OpenAPI / Orval out of sync | Run `pnpm generate:api` after editing `openapi/` |
+
+---
+
+## OpenAPI & typed clients (Orval)
+
+HTTP contracts live in [`openapi/`](openapi/):
+
+| Spec | Describes |
+|------|-----------|
+| [`agent.openapi.yaml`](openapi/agent.openapi.yaml) | Agent: `/health`, `/status`, `/sign-challenge` |
+| [`backend.openapi.yaml`](openapi/backend.openapi.yaml) | Your backend: `/localid/challenge`, `/localid/verify` |
+
+**Dev mode:** set `server.dev_mode: true` in agent config so the running agent serves the spec at `http://127.0.0.1:17443/openapi.json`. Your frontend tooling can point Orval at that live URL or at the checked-in YAML files.
+
+Regenerate the shared TypeScript client:
+
+```bash
+pnpm generate:api
+```
+
+This syncs the spec into the Go binary (`scripts/sync-openapi.sh`) and runs [Orval](https://orval.dev/) in `@rqc-icu/localid-client`:
+
+```typescript
+import { agentOpenAPI, backendOpenAPI } from "@rqc-icu/localid-client";
+
+const health = await agentOpenAPI.getHealth();
+const { challenge } = (await backendOpenAPI.createChallenge()).data;
+```
+
+For your own app, add Orval with `input` pointing at `openapi/agent.openapi.yaml` or the live `openapi.json` endpoint. See `packages/localid-client/orval.config.ts` for a working config.
+
+The hand-written helpers in `@rqc-icu/localid-client` (`signChallenge`, `fetchChallenge`, etc.) remain the simplest path for the examples; the Orval output is for teams that want generated types and operation functions.
+
+---
+
+## Documentation
+
+| Topic | Guide |
+|-------|-------|
+| Architecture & API | [docs/architecture.md](docs/architecture.md) |
+| Agent config & smoke tests | [docs/agent-config.md](docs/agent-config.md) |
+| React browser demo | [docs/react-example.md](docs/react-example.md) |
+| Vue browser demo | [examples/vue/README.md](examples/vue/README.md) |
+| FastAPI backend | [examples/fastapi/README.md](examples/fastapi/README.md) |
+| Laravel backend | [examples/laravel/README.md](examples/laravel/README.md) |
+| All examples | [examples/README.md](examples/README.md) |
+| Tauri desktop app | [docs/desktop.md](docs/desktop.md) |
