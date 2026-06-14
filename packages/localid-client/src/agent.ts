@@ -1,4 +1,4 @@
-import { getAgentUrl } from "./config";
+import { getAgentUrl, getFetch } from "./config";
 import type {
   AgentReadiness,
   HealthResponse,
@@ -26,11 +26,12 @@ async function parseJSON<T>(response: Response): Promise<T> {
 
 export async function checkAgentReadiness(): Promise<AgentReadiness> {
   const agentUrl = getAgentUrl();
+  const doFetch = getFetch();
 
   try {
     const [healthRes, statusRes] = await Promise.all([
-      fetch(`${agentUrl}/health`),
-      fetch(`${agentUrl}/status`),
+      doFetch(`${agentUrl}/health`),
+      doFetch(`${agentUrl}/status`),
     ]);
 
     const health = await parseJSON<HealthResponse>(healthRes);
@@ -54,21 +55,21 @@ export async function checkAgentReadiness(): Promise<AgentReadiness> {
 }
 
 export async function fetchHealth(): Promise<HealthResponse> {
-  const response = await fetch(`${getAgentUrl()}/health`);
+  const response = await getFetch()(`${getAgentUrl()}/health`);
   return parseJSON<HealthResponse>(response);
 }
 
 export async function fetchStatus(): Promise<StatusResponse> {
-  const response = await fetch(`${getAgentUrl()}/status`);
+  const response = await getFetch()(`${getAgentUrl()}/status`);
   return parseJSON<StatusResponse>(response);
 }
 
 export async function signChallenge(
   request: SignChallengeRequest,
 ): Promise<SignChallengeResponse> {
-  const response = await fetch(`${getAgentUrl()}/sign-challenge`, {
+  const response = await getFetch()(`${getAgentUrl()}/sign-challenge`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", Origin: request.origin },
     body: JSON.stringify(request),
   });
 

@@ -23,16 +23,18 @@ describe("agent and backend clients", () => {
   let fetchMock: FetchMock;
 
   beforeEach(() => {
+    fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
     configureLocalIDClient({
       agentUrl: "http://127.0.0.1:17443",
       backendUrl: "http://localhost:8000",
+      fetchImpl: fetchMock as typeof fetch,
     });
-    fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    configureLocalIDClient({ fetchImpl: null });
   });
 
   it("checks readiness successfully", async () => {
@@ -123,7 +125,10 @@ describe("agent and backend clients", () => {
     await signChallenge(request);
     expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:17443/sign-challenge", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Origin: request.origin,
+      },
       body: JSON.stringify(request),
     });
   });

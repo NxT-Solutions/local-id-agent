@@ -1,4 +1,4 @@
-import { getAgentUrl, getBackendUrl } from "../config";
+import { getAgentUrl, getBackendUrl, getFetch } from "../config";
 
 async function readResponseData(response: Response): Promise<unknown> {
   const contentType = response.headers.get("content-type") ?? "";
@@ -38,7 +38,7 @@ export const agentFetch = async <T>(
   url: string,
   options: RequestInit = {},
 ): Promise<T> => {
-  const response = await fetch(
+  const response = await getFetch()(
     joinUrl(getAgentUrl(), url),
     withOriginHeader(options),
   );
@@ -55,7 +55,7 @@ export const backendFetch = async <T>(
   url: string,
   options: RequestInit = {},
 ): Promise<T> => {
-  const response = await fetch(joinUrl(getBackendUrl(), url), options);
+  const response = await getFetch()(joinUrl(getBackendUrl(), url), options);
   const data = await readResponseData(response);
 
   return {

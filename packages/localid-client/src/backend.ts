@@ -1,4 +1,4 @@
-import { getBackendUrl } from "./config";
+import { getBackendUrl, getFetch } from "./config";
 import type { ChallengeResponse, VerifyRequest, VerifyResponse } from "./types";
 
 async function parseJSON<T>(response: Response): Promise<T> {
@@ -21,7 +21,7 @@ async function parseJSON<T>(response: Response): Promise<T> {
 export async function fetchChallenge(
   backendUrl: string = getBackendUrl(),
 ): Promise<ChallengeResponse> {
-  const response = await fetch(`${backendUrl}/localid/challenge`, {
+  const response = await getFetch()(`${backendUrl}/localid/challenge`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({}),
@@ -34,7 +34,7 @@ export async function verifyProof(
   backendUrl: string,
   proof: VerifyRequest,
 ): Promise<VerifyResponse> {
-  const response = await fetch(`${backendUrl}/localid/verify`, {
+  const response = await getFetch()(`${backendUrl}/localid/verify`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(proof),
