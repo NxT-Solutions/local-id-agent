@@ -1,0 +1,83 @@
+services:
+  agent:
+    profiles: ["demo-mock"]
+    build:
+      context: .
+      dockerfile: docker/agent.Dockerfile
+    command: ["--config", "/config/agent.config.json"]
+    volumes:
+      - ./docker/agent.config.mock.json:/config/agent.config.json:ro
+    ports:
+      - "17443:17443"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - localid-demo
+
+  agent-eid:
+    profiles: ["demo-eid-container"]
+    build:
+      context: .
+      dockerfile: docker/agent.Dockerfile
+    command: ["--config", "/config/agent.config.json"]
+    volumes:
+      - ./docker/agent.config.eid.json:/config/agent.config.json:ro
+      - /var/run/pcscd/pcscd.comm:/var/run/pcscd/pcscd.comm
+      - /dev/bus/usb:/dev/bus/usb
+    ports:
+      - "17443:17443"
+    depends_on:
+      - backend
+    privileged: true
+    restart: unless-stopped
+    networks:
+      - localid-demo
+
+  agent-pkcs11:
+    profiles: ["demo-pkcs11-container"]
+    build:
+      context: .
+      dockerfile: docker/agent.Dockerfile
+    command: ["--config", "/config/agent.config.json"]
+    volumes:
+      - ./docker/agent.config.pkcs11.json:/config/agent.config.json:ro
+      - /var/run/pcscd/pcscd.comm:/var/run/pcscd/pcscd.comm
+      - /dev/bus/usb:/dev/bus/usb
+    ports:
+      - "17443:17443"
+    depends_on:
+      - backend
+    privileged: true
+    restart: unless-stopped
+    networks:
+      - localid-demo
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    networks:
+      - localid-demo
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+    environment:
+      FRONTEND_AGENT_URL: ${FRONTEND_AGENT_URL:-http://localhost:17443}
+      FRONTEND_BACKEND_URL: ${FRONTEND_BACKEND_URL:-http://localhost:8000}
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - localid-demo
+
+networks:
+  localid-demo:
+    driver: bridge

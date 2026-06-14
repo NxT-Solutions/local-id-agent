@@ -1,0 +1,38 @@
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 17443,
+    "allow_remote_bind": true,
+    "dev_mode": false
+  },
+  "security": {
+    "allowed_origins": [
+      "http://localhost:5173"
+    ],
+    "allowed_backends": [
+      "http://localhost:8000"
+    ],
+    "challenge_max_age_seconds": 60,
+    "production": true
+  },
+  "providers": {
+    "default": "belgian_eid",
+    "mock": {
+      "enabled": false
+    },
+    "pkcs11": {
+      "enabled": false,
+      "module_path": "auto",
+      "token_label": "",
+      "certificate_label": "",
+      "pin_prompt": "terminal"
+    },
+    "belgian_eid": {
+      "enabled": true,
+      "pkcs11_module_path": "auto"
+    }
+  },
+  "logging": {
+    "level": "info"
+  }
+}

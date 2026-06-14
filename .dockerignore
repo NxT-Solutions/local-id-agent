@@ -1,0 +1,7 @@
+.git
+.turbo
+node_modules
+**/node_modules
+**/dist
+apps/desktop/src-tauri/target
+agent-transcripts
