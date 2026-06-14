@@ -74,17 +74,18 @@ Run from repo root and choose one mode:
 
 ### Mode 1: `pnpm demo:native-eid` (recommended on macOS)
 
-- Stops Docker agent containers that could occupy `:17443`.
-- Starts Docker backend on `:8000`.
+- Stops Docker **frontend** and **agent** containers (`frontend`, `agent`, `agent-eid`, `agent-pkcs11`); keeps **backend** on `:8000`.
 - Builds sidecar (unless `--skip-sidecar-build` is passed to the script directly).
-- Launches `pnpm --filter desktop tauri dev` with `LOCALID_PKCS11_PIN` exported.
-- Use the desktop app **Demo** tab for full auth flow.
+- Launches the **Tauri desktop app** with `LOCALID_PKCS11_PIN` exported — **not** the browser at `http://localhost:5173`.
+- First run copies `config.desktop.json` with `belgian_eid` as the default provider; if you used the app before, open **Settings → Belgian eID → Save**, then use the **Demo** tab.
 
 Example:
 
 ```bash
 LOCALID_PKCS11_PIN=1234 pnpm demo:native-eid
 ```
+
+If a browser tab at `:5173` still shows **Provider: mock (ready)**, you are on the Docker/browser demo from an earlier `docker:demo` or `demo:docker-eid` run — close that tab and use the Tauri window instead, or run `pnpm demo:stop` first.
 
 ### Mode 2: `pnpm demo:docker-eid`
 
@@ -269,6 +270,7 @@ Run from the **repository root** unless noted.
 | `cargo metadata: No such file or directory` | Install Rust: [rustup.rs](https://rustup.rs/), then `source "$HOME/.cargo/env"` |
 | Agent unreachable in browser/desktop | Start agent: `cd services/agent && go run ./cmd/localid-agent --config config.example.json` |
 | Browser at `:1420` shows `NetworkError when attempting to fetch resource` | `pnpm run dev:desktop` is UI-only and does not start sidecar; use `pnpm demo:native-eid` (or run agent separately) |
+| Browser at `:5173` shows **Provider: mock (ready)** after `demo:native-eid` | Stale Docker frontend from `docker:demo` / `demo:docker-eid`; close the tab, run `pnpm demo:stop`, then use the **Tauri desktop window** from `demo:native-eid`. In the app: **Settings → Belgian eID → Save** if provider is still mock |
 | 403 from `/sign-challenge` | Origin must match `security.allowed_origins` exactly (e.g. `http://localhost:5173` or `tauri://localhost`) |
 | Verify failed in demo | Restart mock backend; challenges expire after 60s and are one-time use |
 | Desktop sidecar won't start | Run `pnpm run build:sidecar` after agent code changes |
