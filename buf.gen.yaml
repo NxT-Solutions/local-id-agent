@@ -1,0 +1,15 @@
+version: v2
+managed:
+  enabled: true
+  override:
+    - file_option: go_package_prefix
+      value: github.com/rqc-icu/localid-agent/services/agent/internal/protocol/pb
+plugins:
+  - remote: buf.build/protocolbuffers/go
+    out: services/agent/internal/protocol/pb
+    opt: paths=source_relative
+  - remote: buf.build/bufbuild/es
+    out: packages/localid-client/src/generated
+    opt:
+      - target=ts
+      - import_extension=none

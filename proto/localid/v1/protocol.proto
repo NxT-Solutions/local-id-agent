@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package localid.v1;
+
+option go_package = "github.com/rqc-icu/localid-agent/services/agent/internal/protocol/pb/localid/v1;localidv1";
+
+// SignChallengeRequest is the body for POST /sign-challenge.
+message SignChallengeRequest {
+  string challenge = 1;
+  string backend = 2;
+  string purpose = 3;
+  string origin = 4;
+}
+
+// SignChallengeResponse is returned by POST /sign-challenge on success.
+message SignChallengeResponse {
+  string provider = 1;
+  string algorithm = 2;
+  string challenge = 3;
+  string signature = 4;
+  string certificate = 5;
+  string signedAt = 6;
+}
+
+// Status is returned by GET /status.
+message Status {
+  string provider = 1;
+  bool ready = 2;
+  bool cardPresent = 3;
+}
+
+// HealthResponse is returned by GET /health.
+message HealthResponse {
+  bool ok = 1;
+  string name = 2;
+  string version = 3;
+}
