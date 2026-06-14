@@ -91,7 +91,9 @@ fn backfill_desktop_config(path: &PathBuf) -> Result<(), String> {
     Ok(())
 }
 
-fn ensure_valid_default_provider(root_object: &mut serde_json::Map<String, serde_json::Value>) -> bool {
+fn ensure_valid_default_provider(
+    root_object: &mut serde_json::Map<String, serde_json::Value>,
+) -> bool {
     let providers_value = root_object
         .entry("providers")
         .or_insert_with(|| serde_json::json!({}));
@@ -103,47 +105,47 @@ fn ensure_valid_default_provider(root_object: &mut serde_json::Map<String, serde
         return false;
     };
 
-    let default_provider = providers
+    let configured_default = providers
         .get("default")
         .and_then(|value| value.as_str())
         .unwrap_or(FALLBACK_PROVIDER)
         .to_string();
     let mut changed = false;
 
-    let default_enabled = providers
-        .get(&default_provider)
-        .and_then(|value| value.as_object())
-        .and_then(|value| value.get("enabled"))
-        .and_then(|value| value.as_bool())
-        .unwrap_or(false);
+    let default_provider = match configured_default.as_str() {
+        "mock" | "pkcs11" | "belgian_eid" => configured_default,
+        _ => {
+            changed = true;
+            FALLBACK_PROVIDER.to_string()
+        }
+    };
 
-    if default_enabled {
-        return false;
-    }
-
-    if default_provider != FALLBACK_PROVIDER {
+    if providers.get("default").and_then(|value| value.as_str()) != Some(default_provider.as_str())
+    {
         providers.insert(
             "default".to_string(),
-            serde_json::Value::String(FALLBACK_PROVIDER.to_string()),
+            serde_json::Value::String(default_provider.clone()),
         );
         changed = true;
     }
 
-    let fallback_value = providers
-        .entry(FALLBACK_PROVIDER.to_string())
+    let selected_provider_value = providers
+        .entry(default_provider.clone())
         .or_insert_with(|| serde_json::json!({}));
-    if !fallback_value.is_object() {
-        *fallback_value = serde_json::json!({});
+    if !selected_provider_value.is_object() {
+        *selected_provider_value = serde_json::json!({});
         changed = true;
     }
 
-    if let Some(fallback) = fallback_value.as_object_mut() {
-        let fallback_enabled = fallback
-            .get("enabled")
-            .and_then(|value| value.as_bool())
-            .unwrap_or(false);
-        if !fallback_enabled {
-            fallback.insert("enabled".to_string(), serde_json::Value::Bool(true));
+    let default_enabled = selected_provider_value
+        .as_object()
+        .and_then(|value| value.get("enabled"))
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false);
+
+    if let Some(selected_provider) = selected_provider_value.as_object_mut() {
+        if !default_enabled {
+            selected_provider.insert("enabled".to_string(), serde_json::Value::Bool(true));
             changed = true;
         }
     }
@@ -218,9 +220,7 @@ fn spawn_agent(app: &AppHandle, process: &AgentProcess) -> Result<(), String> {
         sidecar_command = sidecar_command.env("LOCALID_BEID_PKCS11_MODULE", module);
     }
 
-    let (_event_rx, sidecar) = sidecar_command
-        .spawn()
-        .map_err(with_sidecar_rebuild_hint)?;
+    let (_event_rx, sidecar) = sidecar_command.spawn().map_err(with_sidecar_rebuild_hint)?;
 
     *process.0.lock().unwrap() = Some(sidecar);
     Ok(())
@@ -258,7 +258,10 @@ fn restart_agent(app: AppHandle, process: State<'_, AgentProcess>) -> Result<(),
 }
 
 #[tauri::command]
-fn get_diagnostics(app: AppHandle, process: State<'_, AgentProcess>) -> Result<DiagnosticsInfo, String> {
+fn get_diagnostics(
+    app: AppHandle,
+    process: State<'_, AgentProcess>,
+) -> Result<DiagnosticsInfo, String> {
     let config_path = ensure_config(&app)?.to_string_lossy().to_string();
     let sidecar_running = process.0.lock().unwrap().is_some();
 
@@ -280,8 +283,7 @@ fn show_main_window(app: &AppHandle) {
 
 fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let open_item = MenuItem::with_id(app, "tray-open", "Open", true, None::<&str>)?;
-    let restart_item =
-        MenuItem::with_id(app, "tray-restart", "Restart Agent", true, None::<&str>)?;
+    let restart_item = MenuItem::with_id(app, "tray-restart", "Restart Agent", true, None::<&str>)?;
     let quit_item = MenuItem::with_id(app, "tray-quit", "Quit", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&open_item, &restart_item, &quit_item])?;
 
