@@ -197,6 +197,9 @@ fn spawn_agent(app: &AppHandle, process: &AgentProcess) -> Result<(), String> {
     let pkcs11_pin = std::env::var("LOCALID_PKCS11_PIN")
         .ok()
         .filter(|pin| !pin.trim().is_empty());
+    let beid_module = std::env::var("LOCALID_BEID_PKCS11_MODULE")
+        .ok()
+        .filter(|module| !module.trim().is_empty());
 
     if let Some(child) = process.0.lock().unwrap().take() {
         let _ = child.kill();
@@ -210,6 +213,9 @@ fn spawn_agent(app: &AppHandle, process: &AgentProcess) -> Result<(), String> {
     sidecar_command = sidecar_command.args(["--config", &config_arg]);
     if let Some(pin) = pkcs11_pin {
         sidecar_command = sidecar_command.env("LOCALID_PKCS11_PIN", pin);
+    }
+    if let Some(module) = beid_module {
+        sidecar_command = sidecar_command.env("LOCALID_BEID_PKCS11_MODULE", module);
     }
 
     let (_event_rx, sidecar) = sidecar_command
