@@ -4,8 +4,11 @@ WORKDIR /app
 
 RUN corepack enable
 
-COPY . .
-RUN pnpm install --frozen-lockfile
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY packages/localid-client ./packages/localid-client
+COPY examples/react ./examples/react
+
+RUN pnpm install --frozen-lockfile --filter localid-react-example...
 RUN pnpm --filter localid-react-example... build
 
 FROM nginx:1.27-alpine

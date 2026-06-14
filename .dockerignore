@@ -3,5 +3,14 @@
 node_modules
 **/node_modules
 **/dist
+**/coverage
+**/target
+apps/desktop
 apps/desktop/src-tauri/target
+examples/vue
+examples/laravel
+examples/fastapi
+*.log
+.cursor
+.vscode
 agent-transcripts
