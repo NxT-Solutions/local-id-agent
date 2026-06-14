@@ -1,0 +1,149 @@
+openapi: 3.1.0
+info:
+  title: LocalID Backend API
+  version: 0.1.0
+  description: |
+    Reference contract for customer backends integrating with LocalID Agent.
+    Issue challenges and verify signed proofs. Your backend owns sessions.
+
+servers:
+  - url: http://localhost:8000
+    description: Local development (Go mock, FastAPI, or Laravel examples)
+
+tags:
+  - name: LocalID
+
+paths:
+  /localid/challenge:
+    post:
+      operationId: createChallenge
+      tags: [LocalID]
+      summary: Issue a one-time challenge
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+      responses:
+        "200":
+          description: Challenge issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChallengeResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /localid/verify:
+    post:
+      operationId: verifyProof
+      tags: [LocalID]
+      summary: Verify signed proof and authenticate user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyRequest"
+      responses:
+        "200":
+          description: Verification succeeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerifyResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+components:
+  schemas:
+    ChallengeResponse:
+      type: object
+      required: [challenge]
+      properties:
+        challenge:
+          type: string
+          description: Base64url random challenge (single use, ~60s TTL)
+
+    VerifyRequest:
+      type: object
+      required:
+        - challenge
+        - backend
+        - origin
+        - purpose
+        - provider
+        - algorithm
+        - signature
+        - signedAt
+      properties:
+        challenge:
+          type: string
+        backend:
+          type: string
+        origin:
+          type: string
+        purpose:
+          type: string
+          enum: [login]
+        provider:
+          type: string
+        algorithm:
+          type: string
+          enum: [RS256]
+        signature:
+          type: string
+        certificate:
+          type: string
+        signedAt:
+          type: string
+          format: date-time
+
+    VerifyResponse:
+      type: object
+      required: [success, user]
+      properties:
+        success:
+          type: boolean
+        user:
+          $ref: "#/components/schemas/VerifyUser"
+
+    VerifyUser:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Verification failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"

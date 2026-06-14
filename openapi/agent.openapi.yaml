@@ -1,0 +1,211 @@
+openapi: 3.1.0
+info:
+  title: LocalID Agent API
+  version: 0.1.0
+  description: |
+    Localhost identity agent for signing backend challenges with a smartcard or PKCS#11 device.
+    Does not issue sessions or tokens.
+
+    In development, this spec is also served at `GET /openapi.json` when `server.dev_mode` is enabled.
+
+servers:
+  - url: http://127.0.0.1:17443
+    description: Default local agent
+
+tags:
+  - name: Health
+  - name: Provider
+  - name: Signing
+
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      tags: [Health]
+      summary: Agent liveness
+      responses:
+        "200":
+          description: Agent is running
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /status:
+    get:
+      operationId: getStatus
+      tags: [Provider]
+      summary: Active provider status
+      responses:
+        "200":
+          description: Provider status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /sign-challenge:
+    post:
+      operationId: signChallenge
+      tags: [Signing]
+      summary: Sign a backend challenge
+      description: |
+        Signs a canonical JSON payload with the configured provider.
+        Requires `Origin` header matching `origin` in the body and allowlisted in agent config.
+      parameters:
+        - $ref: "#/components/parameters/OriginHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignChallengeRequest"
+      responses:
+        "200":
+          description: Signed challenge proof
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignChallengeResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+
+  /openapi.json:
+    get:
+      operationId: getOpenAPISpec
+      tags: [Health]
+      summary: OpenAPI document (dev mode only)
+      description: Returns this OpenAPI specification when `server.dev_mode` is true.
+      responses:
+        "200":
+          description: OpenAPI 3.1 JSON document
+          content:
+            application/json:
+              schema:
+                type: object
+        "404":
+          description: Disabled unless dev mode is enabled
+
+components:
+  parameters:
+    OriginHeader:
+      name: Origin
+      in: header
+      required: true
+      description: Browser origin; must match request body `origin` and allowed_origins config
+      schema:
+        type: string
+        example: http://localhost:5173
+
+  schemas:
+    HealthResponse:
+      type: object
+      required: [ok, name, version]
+      properties:
+        ok:
+          type: boolean
+        name:
+          type: string
+        version:
+          type: string
+
+    Status:
+      type: object
+      required: [provider, ready, cardPresent]
+      properties:
+        provider:
+          type: string
+        ready:
+          type: boolean
+        cardPresent:
+          type: boolean
+
+    SignChallengeRequest:
+      type: object
+      required: [challenge, backend, purpose, origin]
+      properties:
+        challenge:
+          type: string
+          description: Base64url challenge from your backend
+        backend:
+          type: string
+          description: Exact backend URL from allowed_backends
+          example: http://localhost:8000
+        purpose:
+          type: string
+          enum: [login]
+        origin:
+          type: string
+          description: Must match Origin header
+          example: http://localhost:5173
+
+    SignChallengeResponse:
+      type: object
+      required: [provider, algorithm, challenge, signature, signedAt]
+      properties:
+        provider:
+          type: string
+        algorithm:
+          type: string
+          example: RS256
+        challenge:
+          type: string
+        signature:
+          type: string
+          description: Base64url RSA PKCS#1 v1.5 signature over canonical payload
+        certificate:
+          type: string
+          description: Base64 DER certificate (optional for some providers)
+        signedAt:
+          type: string
+          format: date-time
+          description: RFC3339 UTC timestamp used in canonical payload
+
+    ErrorResponse:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Origin, backend, or purpose not allowed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    UnsupportedMediaType:
+      description: Content-Type must be application/json
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    PayloadTooLarge:
+      description: Request body exceeds 64 KB
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
