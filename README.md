@@ -180,6 +180,7 @@ Run from the **repository root** unless noted.
 | `pnpm generate:api` | Sync OpenAPI spec + Orval clients in `localid-client` |
 | `pnpm run test` | Go tests + TypeScript checks (all packages) |
 | `pnpm run test:go` | `go test ./...` in `services/agent` |
+| `pnpm run test:coverage` | Go + TS coverage (`test:coverage:go` / `:ts`) |
 | `pnpm run build` | Build client, React example, desktop frontend |
 | `pnpm run build:sidecar` | Compile Go agent for desktop bundle |
 | `pnpm run build:react` | Production build of React demo |
