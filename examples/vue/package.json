@@ -1,0 +1,23 @@
+{
+  "name": "localid-vue-example",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "vue-tsc -b --noEmit"
+  },
+  "dependencies": {
+    "@rqc-icu/localid-client": "workspace:*",
+    "vue": "^3.5.28"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.4",
+    "@vue/tsconfig": "^0.9.0",
+    "typescript": "~6.0.3",
+    "vite": "^8.0.16",
+    "vue-tsc": "^3.2.5"
+  }
+}
