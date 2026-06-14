@@ -21,6 +21,9 @@ services:
       context: .
       dockerfile: docker/agent.Dockerfile
     command: ["--config", "/config/agent.config.json"]
+    environment:
+      LOCALID_PKCS11_PIN: ${LOCALID_PKCS11_PIN:-}
+      LOCALID_BEID_PKCS11_MODULE: ${LOCALID_BEID_PKCS11_MODULE:-}
     volumes:
       - ./docker/agent.config.eid.json:/config/agent.config.json:ro
       - /var/run/pcscd/pcscd.comm:/var/run/pcscd/pcscd.comm
@@ -29,6 +32,12 @@ services:
       - "17443:17443"
     depends_on:
       - backend
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:17443/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
     privileged: true
     restart: unless-stopped
     networks:
@@ -40,6 +49,8 @@ services:
       context: .
       dockerfile: docker/agent.Dockerfile
     command: ["--config", "/config/agent.config.json"]
+    environment:
+      LOCALID_PKCS11_PIN: ${LOCALID_PKCS11_PIN:-}
     volumes:
       - ./docker/agent.config.pkcs11.json:/config/agent.config.json:ro
       - /var/run/pcscd/pcscd.comm:/var/run/pcscd/pcscd.comm
@@ -48,6 +59,12 @@ services:
       - "17443:17443"
     depends_on:
       - backend
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:17443/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
     privileged: true
     restart: unless-stopped
     networks:

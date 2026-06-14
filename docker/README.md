@@ -96,6 +96,14 @@ Or:
 pnpm run docker:up:eid-container
 ```
 
+Optional environment overrides:
+
+```bash
+LOCALID_PKCS11_PIN=1234 pnpm run docker:up:eid-container
+# and/or force a specific Belgian eID PKCS#11 module:
+LOCALID_BEID_PKCS11_MODULE=/usr/lib/libbeidpkcs11.so pnpm run docker:up:eid-container
+```
+
 This profile mounts:
 
 - `/var/run/pcscd/pcscd.comm` (PC/SC daemon socket)
@@ -148,9 +156,17 @@ If you publish different host ports, update both frontend runtime URLs and these
 
 ## Belgium eID / PKCS#11 caveats
 
-- **Current provider status in this repo:** `pkcs11` and `belgian_eid` providers are currently stubs (`ErrNotImplemented`) under `services/agent/internal/providers/`.
-- **Result:** real card signing is not yet functional until provider implementation is completed.
-- **When implemented, you'll still need:** host smartcard middleware, reachable `pcscd`, and correct PKCS#11 module path/token labels.
+- `GET /status` now returns `200` even when no card is inserted, with `ready=false` and `cardPresent=false`.
+- Set `LOCALID_PKCS11_PIN` when the token prompts for PIN (recommended for container/non-interactive runs).
+- Belgian eID module auto-discovery checks common paths (Linux and macOS). Override with `LOCALID_BEID_PKCS11_MODULE` if needed.
+- Generic PKCS#11 profile supports `module_path`, `token_label`, and `certificate_label` in config.
+- You still need host smartcard middleware, reachable `pcscd`, and a readable PKCS#11 module in the container.
+
+Troubleshooting:
+
+- If `/status` stays `ready=false`, check container logs and validate module path + `pcscd` socket mount.
+- If signing fails with PIN errors, export `LOCALID_PKCS11_PIN` before starting compose.
+- If module loading fails, pass an explicit module path in config or `LOCALID_BEID_PKCS11_MODULE`.
 
 OS caveats:
 

@@ -29,7 +29,9 @@ Copy `services/agent/config.example.json` and adjust:
 - `server.dev_mode` — when `true`, serves OpenAPI at `GET /openapi.json` and `GET /openapi.yaml` (disable in production)
 - `security.allowed_origins` — exact browser origins permitted to call the agent
 - `security.allowed_backends` — exact backend URLs whose challenges may be signed
-- `providers.default` — `mock` for development (PKCS#11 and Belgian eID are stubs in M1–3)
+- `providers.default` — choose `mock`, `pkcs11`, or `belgian_eid`
+- `providers.pkcs11.pin_prompt = "terminal"` reads PIN from `LOCALID_PKCS11_PIN` when token login is required
+- `LOCALID_BEID_PKCS11_MODULE` can override Belgian eID auto module detection
 
 ## Mock backend
 
