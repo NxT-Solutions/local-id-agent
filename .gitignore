@@ -10,9 +10,10 @@
 # Test binary
 *.test
 
-# Output of go coverage
+# Output of Go coverage
 *.out
 coverage.html
+coverage/
 
 # Go workspace
 go.work
@@ -29,15 +30,32 @@ go.work.sum
 .DS_Store
 Thumbs.db
 
-# Local config overrides
+# Environment and secrets (keep *.example templates tracked)
+.env
+.env.*
+!.env.example
+.envrc
+*.pem
+*.key
+credentials.json
+secrets.json
+
+# Local overrides
+*.local
 config.json
 config.local.json
 
-# Node / frontend
+# Node / frontend (pnpm)
 node_modules/
 dist/
-.env
+build/
 package-lock.json
 npm-debug.log*
 pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 *.tsbuildinfo
+
+# Caches
+.cache/
+.turbo/
