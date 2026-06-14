@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/rqc-icu/localid-agent/services/agent/internal/config"
-	"github.com/rqc-icu/localid-agent/services/agent/internal/protocol"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -25,8 +24,11 @@ func TestNew(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "pkcs11", p.Name())
 		status, err := p.Status(context.Background())
-		assert.Nil(t, status)
-		assert.ErrorIs(t, err, protocol.ErrNotImplemented)
+		require.NoError(t, err)
+		require.NotNil(t, status)
+		assert.Equal(t, "pkcs11", status.Provider)
+		assert.False(t, status.Ready)
+		assert.False(t, status.CardPresent)
 	})
 
 	t.Run("belgian_eid", func(t *testing.T) {
@@ -37,8 +39,11 @@ func TestNew(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "belgian_eid", p.Name())
 		status, err := p.Status(context.Background())
-		assert.Nil(t, status)
-		assert.ErrorIs(t, err, protocol.ErrNotImplemented)
+		require.NoError(t, err)
+		require.NotNil(t, status)
+		assert.Equal(t, "belgian_eid", status.Provider)
+		assert.False(t, status.Ready)
+		assert.False(t, status.CardPresent)
 	})
 
 	t.Run("unknown", func(t *testing.T) {

@@ -4,6 +4,7 @@ go 1.25.6
 
 require (
 	github.com/go-chi/chi/v5 v5.3.0
+	github.com/miekg/pkcs11 v1.1.2
 	github.com/rs/cors v1.11.1
 	github.com/stretchr/testify v1.11.1
 	google.golang.org/protobuf v1.36.11
