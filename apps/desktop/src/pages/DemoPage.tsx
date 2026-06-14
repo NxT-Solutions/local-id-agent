@@ -25,6 +25,27 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
+const AUTH_STEP_TIMEOUT_MS = 12000;
+
+function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      reject(new Error(`${label} timed out after ${AUTH_STEP_TIMEOUT_MS}ms`));
+    }, AUTH_STEP_TIMEOUT_MS);
+
+    void promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 export function DemoPage() {
   const [open, setOpen] = useState(false);
   const [authState, setAuthState] = useState<AuthState>("idle");
@@ -39,7 +60,7 @@ export function DemoPage() {
     setOpen(true);
 
     try {
-      const readiness = await checkAgentReadiness();
+      const readiness = await withTimeout(checkAgentReadiness(), "Agent readiness");
       setAgentReady(Boolean(readiness.healthy && readiness.ready));
 
       if (!readiness.healthy || !readiness.ready) {
@@ -48,25 +69,34 @@ export function DemoPage() {
 
       const origin = window.location.origin;
       const backend = getBackendUrl();
-      const { challenge } = await fetchChallenge(backend);
-      const proof = await signChallenge({
-        challenge,
-        backend,
-        purpose: "login",
-        origin,
-      });
+      const { challenge } = await withTimeout(
+        fetchChallenge(backend),
+        "Challenge request",
+      );
+      const proof = await withTimeout(
+        signChallenge({
+          challenge,
+          backend,
+          purpose: "login",
+          origin,
+        }),
+        "Challenge signing",
+      );
 
-      const result = await verifyProof(backend, {
-        challenge: proof.challenge,
-        backend,
-        origin,
-        purpose: "login",
-        provider: proof.provider,
-        algorithm: proof.algorithm,
-        signature: proof.signature,
-        certificate: proof.certificate ?? "",
-        signedAt: proof.signedAt,
-      });
+      const result = await withTimeout(
+        verifyProof(backend, {
+          challenge: proof.challenge,
+          backend,
+          origin,
+          purpose: "login",
+          provider: proof.provider,
+          algorithm: proof.algorithm,
+          signature: proof.signature,
+          certificate: proof.certificate ?? "",
+          signedAt: proof.signedAt,
+        }),
+        "Proof verification",
+      );
 
       setUserName(result.user.name);
       setAuthState("success");
@@ -132,13 +162,11 @@ export function DemoPage() {
               {authState === "error" && error}
             </DialogDescription>
           </DialogHeader>
-          {authState !== "loading" && (
-            <div className="flex justify-end">
-              <Button variant="outline" onClick={() => setOpen(false)}>
-                Close
-              </Button>
-            </div>
-          )}
+          <div className="flex justify-end">
+            <Button variant="outline" onClick={() => setOpen(false)}>
+              {authState === "loading" ? "Hide" : "Close"}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

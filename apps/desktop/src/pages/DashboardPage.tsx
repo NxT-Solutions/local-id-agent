@@ -14,12 +14,33 @@ import {
 import { restartAgent } from "@/lib/tauri";
 
 const POLL_INTERVAL_MS = 3000;
+const REQUEST_TIMEOUT_MS = 4000;
+
+function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      reject(new Error(`${label} timed out after ${REQUEST_TIMEOUT_MS}ms`));
+    }, REQUEST_TIMEOUT_MS);
+
+    void promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
 
 export function DashboardPage() {
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [restarting, setRestarting] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const refreshInFlight = useRef(false);
 
   const refresh = useCallback(async () => {
@@ -30,15 +51,14 @@ export function DashboardPage() {
 
     try {
       const [healthResult, statusResult] = await Promise.all([
-        fetchHealth(),
-        fetchStatus(),
+        withTimeout(fetchHealth(), "Health check"),
+        withTimeout(fetchStatus(), "Status check"),
       ]);
       setHealth(healthResult);
       setStatus(statusResult);
       setError(null);
+      setLastUpdated(new Date().toLocaleTimeString());
     } catch (err) {
-      setHealth(null);
-      setStatus(null);
       setError(err instanceof Error ? err.message : "Agent unreachable");
     } finally {
       refreshInFlight.current = false;
@@ -110,7 +130,14 @@ export function DashboardPage() {
 
       {error && (
         <Card className="border-destructive/40">
-          <CardContent className="pt-6 text-sm text-destructive">{error}</CardContent>
+          <CardContent className="space-y-2 pt-6 text-sm">
+            <p className="font-medium text-destructive">Agent is unreachable.</p>
+            <p className="text-destructive">{error}</p>
+            <p className="text-muted-foreground">
+              Check the provider in Settings, then click <strong>Restart agent</strong>.
+              If it still fails, reset config at <code>~/Library/Application Support/icu.rqc.localid-agent/config.json</code>.
+            </p>
+          </CardContent>
         </Card>
       )}
 
@@ -121,8 +148,8 @@ export function DashboardPage() {
             <CardDescription>Agent liveness endpoint</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Badge variant={health?.ok ? "success" : "destructive"}>
-              {health?.ok ? "Healthy" : "Unavailable"}
+            <Badge variant={health?.ok ? "success" : health ? "destructive" : "secondary"}>
+              {health?.ok ? "Healthy" : health ? "Unavailable" : "Checking…"}
             </Badge>
             <dl className="grid gap-2 text-sm">
               <div className="flex justify-between gap-4">
@@ -132,6 +159,10 @@ export function DashboardPage() {
               <div className="flex justify-between gap-4">
                 <dt className="text-muted-foreground">Version</dt>
                 <dd>{health?.version ?? "—"}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">Last update</dt>
+                <dd>{lastUpdated ?? "—"}</dd>
               </div>
             </dl>
           </CardContent>
@@ -143,8 +174,8 @@ export function DashboardPage() {
             <CardDescription>Active signing provider</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Badge variant={status?.ready ? "success" : "warning"}>
-              {status?.ready ? "Ready" : "Not ready"}
+            <Badge variant={status?.ready ? "success" : status ? "warning" : "secondary"}>
+              {status?.ready ? "Ready" : status ? "Not ready" : "Checking…"}
             </Badge>
             <dl className="grid gap-2 text-sm">
               <div className="flex justify-between gap-4">
