@@ -82,6 +82,15 @@ function buildConfig(form: ConfigForm, existingRaw: string): string {
     (existing.providers as Record<string, unknown> | undefined) ?? {};
   const logging =
     (existing.logging as Record<string, unknown> | undefined) ?? {};
+  const nextProviders = { ...providers };
+  const selectedProvider = (nextProviders[form.defaultProvider] as
+    | Record<string, unknown>
+    | undefined) ?? { enabled: true };
+
+  nextProviders[form.defaultProvider] = {
+    ...selectedProvider,
+    enabled: true,
+  };
 
   return JSON.stringify(
     {
@@ -103,7 +112,7 @@ function buildConfig(form: ConfigForm, existingRaw: string): string {
           .filter(Boolean),
       },
       providers: {
-        ...providers,
+        ...nextProviders,
         default: form.defaultProvider,
       },
       logging: {
