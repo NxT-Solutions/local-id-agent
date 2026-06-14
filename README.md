@@ -51,6 +51,18 @@ pnpm generate:api # optional: regenerate Orval clients from openapi/
 
 ---
 
+## Docker demo stack
+
+Run the production-style demo stack (frontend + backend + agent containers):
+
+```bash
+pnpm run docker:demo
+```
+
+For host-agent and smartcard-specific flows (Belgium eID / PKCS#11), see `docker/README.md`.
+
+---
+
 ## How to run
 
 ### 1. Agent only (CLI)

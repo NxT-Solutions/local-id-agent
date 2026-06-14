@@ -20,7 +20,13 @@
     "build:react": "turbo run build --filter=localid-react-example",
     "build:vue": "turbo run build --filter=localid-vue-example",
     "build:desktop": "turbo run build --filter=desktop",
-    "build:sidecar": "bash scripts/build-agent-sidecar.sh"
+    "build:sidecar": "bash scripts/build-agent-sidecar.sh",
+    "docker:up": "docker compose --profile demo-mock up --build -d",
+    "docker:demo": "docker compose --profile demo-mock up --build",
+    "docker:down": "docker compose down --remove-orphans",
+    "docker:up:host-agent": "docker compose up --build -d backend frontend",
+    "docker:up:eid-container": "docker compose --profile demo-eid-container up --build -d backend frontend agent-eid",
+    "docker:up:pkcs11-container": "docker compose --profile demo-pkcs11-container up --build -d backend frontend agent-pkcs11"
   },
   "devDependencies": {
     "turbo": "^2.5.4"
