@@ -1,0 +1,41 @@
+# Binaries
+localid-agent
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Output of go coverage
+*.out
+coverage.html
+
+# Go workspace
+go.work
+go.work.sum
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local config overrides
+config.json
+config.local.json
+
+# Node / frontend
+node_modules/
+dist/
+.env
+package-lock.json
+npm-debug.log*
+pnpm-debug.log*
