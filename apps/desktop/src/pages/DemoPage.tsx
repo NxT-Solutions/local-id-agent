@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   checkAgentReadiness,
   fetchChallenge,
@@ -25,13 +25,18 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-const AUTH_STEP_TIMEOUT_MS = 12000;
+const DEFAULT_AUTH_STEP_TIMEOUT_MS = 12000;
+const SIGN_CHALLENGE_TIMEOUT_MS = 120_000;
 
-function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+function withTimeout<T>(
+  promise: Promise<T>,
+  label: string,
+  timeoutMs = DEFAULT_AUTH_STEP_TIMEOUT_MS,
+): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = window.setTimeout(() => {
-      reject(new Error(`${label} timed out after ${AUTH_STEP_TIMEOUT_MS}ms`));
-    }, AUTH_STEP_TIMEOUT_MS);
+      reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
 
     void promise.then(
       (value) => {
@@ -52,6 +57,18 @@ export function DemoPage() {
   const [userName, setUserName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [agentReady, setAgentReady] = useState(false);
+  const [agentStatusKnown, setAgentStatusKnown] = useState(false);
+
+  const refreshAgentStatus = useCallback(async () => {
+    const readiness = await checkAgentReadiness();
+    setAgentReady(Boolean(readiness.healthy && readiness.ready));
+    setAgentStatusKnown(true);
+    return readiness;
+  }, []);
+
+  useEffect(() => {
+    void refreshAgentStatus();
+  }, [refreshAgentStatus]);
 
   async function handleAuthenticate() {
     setAuthState("loading");
@@ -60,8 +77,7 @@ export function DemoPage() {
     setOpen(true);
 
     try {
-      const readiness = await withTimeout(checkAgentReadiness(), "Agent readiness");
-      setAgentReady(Boolean(readiness.healthy && readiness.ready));
+      const readiness = await withTimeout(refreshAgentStatus(), "Agent readiness");
 
       if (!readiness.healthy || !readiness.ready) {
         throw new Error(readiness.error ?? "Agent is not ready");
@@ -81,6 +97,7 @@ export function DemoPage() {
           origin,
         }),
         "Challenge signing",
+        SIGN_CHALLENGE_TIMEOUT_MS,
       );
 
       const result = await withTimeout(
@@ -132,8 +149,16 @@ export function DemoPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Badge variant={agentReady ? "success" : "secondary"}>
-            {agentReady ? "Agent ready" : "Agent status unknown"}
+          <Badge
+            variant={
+              agentReady ? "success" : agentStatusKnown ? "warning" : "secondary"
+            }
+          >
+            {!agentStatusKnown
+              ? "Checking agent…"
+              : agentReady
+                ? "Agent ready"
+                : "Agent not ready"}
           </Badge>
           <Button onClick={() => void handleAuthenticate()}>
             Authenticate with LocalID
@@ -155,7 +180,7 @@ export function DemoPage() {
             </DialogTitle>
             <DialogDescription>
               {authState === "loading" &&
-                "Requesting challenge, signing with the local agent, and verifying with the backend."}
+                "Requesting challenge, signing with the local agent, and verifying with the backend. If prompted, enter your PIN in the eID dialog — signing may take up to two minutes."}
               {authState === "success" &&
                 userName &&
                 `Signed in as ${userName}.`}
