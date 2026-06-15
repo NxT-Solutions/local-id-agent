@@ -40,6 +40,7 @@ export function DashboardPage() {
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [restarting, setRestarting] = useState(false);
+  const [isChecking, setIsChecking] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const refreshInFlight = useRef(false);
 
@@ -48,6 +49,7 @@ export function DashboardPage() {
       return;
     }
     refreshInFlight.current = true;
+    setIsChecking(true);
 
     try {
       const [healthResult, statusResult] = await Promise.all([
@@ -62,6 +64,7 @@ export function DashboardPage() {
       setError(err instanceof Error ? err.message : "Agent unreachable");
     } finally {
       refreshInFlight.current = false;
+      setIsChecking(false);
     }
   }, []);
 
@@ -148,8 +151,20 @@ export function DashboardPage() {
             <CardDescription>Agent liveness endpoint</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Badge variant={health?.ok ? "success" : health ? "destructive" : "secondary"}>
-              {health?.ok ? "Healthy" : health ? "Unavailable" : "Checking…"}
+            <Badge
+              variant={
+                health?.ok
+                  ? "success"
+                  : isChecking
+                    ? "secondary"
+                    : "destructive"
+              }
+            >
+              {health?.ok
+                ? "Healthy"
+                : isChecking
+                  ? "Checking…"
+                  : "Unavailable"}
             </Badge>
             <dl className="grid gap-2 text-sm">
               <div className="flex justify-between gap-4">
@@ -174,8 +189,20 @@ export function DashboardPage() {
             <CardDescription>Active signing provider</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Badge variant={status?.ready ? "success" : status ? "warning" : "secondary"}>
-              {status?.ready ? "Ready" : status ? "Not ready" : "Checking…"}
+            <Badge
+              variant={
+                status?.ready
+                  ? "success"
+                  : isChecking
+                    ? "secondary"
+                    : "warning"
+              }
+            >
+              {status?.ready
+                ? "Ready"
+                : isChecking
+                  ? "Checking…"
+                  : "Not ready"}
             </Badge>
             <dl className="grid gap-2 text-sm">
               <div className="flex justify-between gap-4">
@@ -186,6 +213,11 @@ export function DashboardPage() {
                 <dt className="text-muted-foreground">Card present</dt>
                 <dd>{status ? (status.cardPresent ? "Yes" : "No") : "—"}</dd>
               </div>
+              {status?.message && !status.ready && (
+                <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-100">
+                  {status.message}
+                </div>
+              )}
             </dl>
           </CardContent>
         </Card>

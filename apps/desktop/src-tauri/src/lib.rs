@@ -11,11 +11,20 @@ use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::ShellExt;
 
 const SIDECAR_NAME: &str = "localid-agent";
+const AGENT_BASE_URL: &str = "http://127.0.0.1:17443";
+const AGENT_FETCH_TIMEOUT_SECS: u64 = 4;
 const REQUIRED_ALLOWED_ORIGINS: [&str; 2] = ["tauri://localhost", "http://localhost:1420"];
 const REQUIRED_ALLOWED_BACKENDS: [&str; 1] = ["http://localhost:8000"];
 const FALLBACK_PROVIDER: &str = "mock";
 
 struct AgentProcess(Mutex<Option<CommandChild>>);
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentFetchResponse {
+    status: u16,
+    body: String,
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -201,7 +210,9 @@ fn spawn_agent(app: &AppHandle, process: &AgentProcess) -> Result<(), String> {
         .filter(|pin| !pin.trim().is_empty());
     let beid_module = std::env::var("LOCALID_BEID_PKCS11_MODULE")
         .ok()
-        .filter(|module| !module.trim().is_empty());
+        .map(|module| module.trim().to_string())
+        .filter(|module| !module.is_empty())
+        .filter(|module| std::path::Path::new(module).is_file());
 
     if let Some(child) = process.0.lock().unwrap().take() {
         let _ = child.kill();
@@ -268,10 +279,57 @@ fn get_diagnostics(
     Ok(DiagnosticsInfo {
         app_version: app.package_info().version.to_string(),
         config_path,
-        agent_url: "http://127.0.0.1:17443".to_string(),
+        agent_url: AGENT_BASE_URL.to_string(),
         platform: std::env::consts::OS.to_string(),
         sidecar_running,
     })
+}
+
+#[tauri::command]
+fn agent_fetch(
+    method: String,
+    path: String,
+    body: Option<String>,
+    origin: Option<String>,
+) -> Result<AgentFetchResponse, String> {
+    if !path.starts_with('/') {
+        return Err("agent path must start with '/'".to_string());
+    }
+
+    let url = format!("{AGENT_BASE_URL}{path}");
+    let agent = ureq::AgentBuilder::new()
+        .timeout(std::time::Duration::from_secs(AGENT_FETCH_TIMEOUT_SECS))
+        .build();
+
+    let upper_method = method.to_ascii_uppercase();
+    let response = match upper_method.as_str() {
+        "GET" => agent.get(&url).call(),
+        "POST" => {
+            let mut request = agent.post(&url).set("Content-Type", "application/json");
+            if let Some(origin_value) = origin.as_deref().filter(|value| !value.is_empty()) {
+                request = request.set("Origin", origin_value);
+            }
+
+            match body {
+                Some(payload) => request.send_string(&payload),
+                None => request.call(),
+            }
+        }
+        _ => return Err(format!("unsupported HTTP method: {method}")),
+    };
+
+    match response {
+        Ok(resp) => {
+            let status = resp.status();
+            let body = resp.into_string().map_err(|error| error.to_string())?;
+            Ok(AgentFetchResponse { status, body })
+        }
+        Err(ureq::Error::Status(status, resp)) => {
+            let body = resp.into_string().unwrap_or_default();
+            Ok(AgentFetchResponse { status, body })
+        }
+        Err(error) => Err(error.to_string()),
+    }
 }
 
 fn show_main_window(app: &AppHandle) {
@@ -338,6 +396,7 @@ pub fn run() {
             write_config,
             restart_agent,
             get_diagnostics,
+            agent_fetch,
         ])
         .run(tauri::generate_context!())
         .expect("error while running LocalID Agent desktop");

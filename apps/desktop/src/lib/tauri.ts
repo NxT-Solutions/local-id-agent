@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { appFetch } from "@/lib/fetch";
+import { fetchHealth, fetchStatus } from "@rqc-icu/localid-client";
 
 export interface DiagnosticsInfo {
   appVersion: string;
@@ -31,12 +31,8 @@ export async function getDiagnostics(): Promise<DiagnosticsInfo> {
 
 export async function copyDiagnostics(): Promise<string> {
   const diagnostics = await getDiagnostics();
-  const health = await appFetch(`${diagnostics.agentUrl}/health`)
-    .then((response) => response.json())
-    .catch(() => ({ error: "unreachable" }));
-  const status = await appFetch(`${diagnostics.agentUrl}/status`)
-    .then((response) => response.json())
-    .catch(() => ({ error: "unreachable" }));
+  const health = await fetchHealth().catch(() => ({ error: "unreachable" }));
+  const status = await fetchStatus().catch(() => ({ error: "unreachable" }));
 
   return JSON.stringify(
     {
