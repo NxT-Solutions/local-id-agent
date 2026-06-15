@@ -1,3 +1,4 @@
+import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import { isAgentRequest, tauriAgentFetch } from "@/lib/agent-fetch";
 
 function isTauriRuntime(): boolean {
@@ -16,9 +17,14 @@ export function appFetch(
   input: RequestInfo | URL,
   init?: RequestInit,
 ): Promise<Response> {
-  if (isTauriRuntime() && isAgentRequest(input)) {
+  if (!isTauriRuntime()) {
+    return globalThis.fetch(input, init);
+  }
+
+  if (isAgentRequest(input)) {
     return tauriAgentFetch(input, init);
   }
 
-  return globalThis.fetch(input, init);
+  // WebView fetch to localhost backends fails with "Load failed"; use the HTTP plugin.
+  return tauriFetch(input, init);
 }
