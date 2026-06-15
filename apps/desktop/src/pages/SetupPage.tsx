@@ -1,4 +1,11 @@
-import { BookOpen, CheckCircle2 } from "lucide-react";
+import {
+  BookOpen,
+  CheckCircle2,
+  Globe,
+  KeyRound,
+  Layers,
+  Terminal,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -10,92 +17,126 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { DocCode } from "@/components/DocCode";
 import { MermaidDiagram } from "@/components/MermaidDiagram";
+import { CopyField } from "@/components/layout/CopyField";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { SetupStep } from "@/components/layout/SetupStep";
 import {
   AUTH_FLOW_DIAGRAM,
   INTEGRATION_OVERVIEW_DIAGRAM,
 } from "@/lib/setup-diagrams";
+import { getAgentUrl } from "@rqc-icu/localid-client";
+
+const CHECKLIST = [
+  "Agent running (Dashboard shows Healthy + Ready)",
+  "Frontend origin added to Allowed origins in Settings",
+  "Backend URL added to Allowed backends in Settings",
+  "Backend implements POST /localid/challenge and POST /localid/verify",
+  "Backend verifies canonical JSON + RS256 signature",
+  "Frontend uses window.location.origin for the origin field",
+  "CORS on your backend allows your frontend origin",
+];
 
 export function SetupPage() {
-  return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Setup guide</h1>
-        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          How to connect your backend API and frontend (React or similar) to the
-          LocalID Agent. The agent signs challenges locally — it does not issue
-          login tokens or sessions.
-        </p>
-      </div>
+  const agentUrl = getAgentUrl();
 
-      <Card>
+  return (
+    <div className="space-y-10">
+      <PageHeader
+        title="Setup guide"
+        description="Connect your backend API and frontend to the LocalID Agent. The agent signs challenges locally — it does not issue login tokens or sessions."
+      />
+
+      <Card className="surface-elevated overflow-hidden">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BookOpen className="h-5 w-5" />
-            What you need
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Layers className="h-4 w-4" />
+            Architecture overview
           </CardTitle>
-          <CardDescription>Three pieces working together</CardDescription>
+          <CardDescription>
+            Three components working together — agent, backend, frontend
+          </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4 text-sm md:grid-cols-3">
-          <div className="rounded-lg border p-4">
-            <p className="font-medium">1. LocalID Agent</p>
-            <p className="mt-1 text-muted-foreground">
-              This desktop app bundles the agent on{" "}
-              <code className="text-xs">127.0.0.1:17443</code>. It signs
-              challenges with your smartcard, eID, or mock provider.
-            </p>
+        <CardContent className="space-y-6">
+          <div className="grid gap-3 md:grid-cols-3">
+            {[
+              {
+                step: "1",
+                title: "LocalID Agent",
+                body: (
+                  <>
+                    Bundled sidecar on{" "}
+                    <code className="font-mono text-xs">{agentUrl}</code>.
+                    Signs challenges with smartcard, eID, or mock provider.
+                  </>
+                ),
+              },
+              {
+                step: "2",
+                title: "Your backend API",
+                body: "Issues one-time challenges and verifies signatures. You own sessions and user login.",
+              },
+              {
+                step: "3",
+                title: "Your frontend",
+                body: "Web app that calls backend → agent → backend with the cryptographic proof.",
+              },
+            ].map((item) => (
+              <div
+                key={item.step}
+                className="relative rounded-lg border bg-muted/20 p-4 pt-8"
+              >
+                <span className="absolute left-3 top-3 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+                  {item.step}
+                </span>
+                <p className="font-medium">{item.title}</p>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  {item.body}
+                </p>
+              </div>
+            ))}
           </div>
-          <div className="rounded-lg border p-4">
-            <p className="font-medium">2. Your backend API</p>
-            <p className="mt-1 text-muted-foreground">
-              Issues one-time challenges and verifies signatures. You own
-              sessions and user login — the agent never does.
-            </p>
-          </div>
-          <div className="rounded-lg border p-4">
-            <p className="font-medium">3. Your frontend</p>
-            <p className="mt-1 text-muted-foreground">
-              A web app (React, Vue, etc.) that calls your backend, then the
-              agent, then sends the proof back to your backend.
-            </p>
-          </div>
-        </CardContent>
-        <CardContent className="pt-0">
-          <MermaidDiagram chart={INTEGRATION_OVERVIEW_DIAGRAM} />
+          <MermaidDiagram
+            chart={INTEGRATION_OVERVIEW_DIAGRAM}
+            className="bg-muted/10"
+          />
         </CardContent>
       </Card>
 
       <section className="space-y-4">
-        <h2 className="text-lg font-semibold">Auth flow</h2>
-        <p className="text-sm text-muted-foreground">
-          Step-by-step request flow between your frontend, backend, and the local
-          agent.
-        </p>
-        <MermaidDiagram chart={AUTH_FLOW_DIAGRAM} />
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold tracking-tight">Auth flow</h2>
+          <p className="text-sm text-muted-foreground">
+            Request sequence between frontend, backend, and local agent.
+          </p>
+        </div>
+        <MermaidDiagram chart={AUTH_FLOW_DIAGRAM} className="surface-elevated" />
       </section>
 
       <Separator />
 
-      <section className="space-y-4">
-        <h2 className="text-lg font-semibold">1. Configure the agent</h2>
-        <p className="text-sm text-muted-foreground">
-          Open <strong>Settings</strong> in this app. Two allowlists must
-          include your exact URLs (scheme + host + port, no trailing slash):
-        </p>
+      <SetupStep
+        step={1}
+        title="Configure the agent"
+        description="Open Settings in this app. Two allowlists must include your exact URLs."
+      >
+        <CopyField label="Default agent URL" value={agentUrl} />
         <div className="grid gap-4 md:grid-cols-2">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Allowed origins</CardTitle>
-              <CardDescription>Browser frontends that may call the agent</CardDescription>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Globe className="h-4 w-4" />
+                Allowed origins
+              </CardTitle>
+              <CardDescription>
+                Browser frontends that may call the agent
+              </CardDescription>
             </CardHeader>
-            <CardContent className="text-sm text-muted-foreground">
-              <p>Examples:</p>
-              <ul className="mt-2 list-inside list-disc space-y-1 font-mono text-xs">
-                <li>http://localhost:5173</li>
-                <li>http://localhost:5174</li>
-                <li>https://app.example.com</li>
-                <li>tauri://localhost</li>
-              </ul>
-              <p className="mt-3">
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              <DocCode title="Examples">{`http://localhost:5173
+http://localhost:5174
+https://app.example.com
+tauri://localhost`}</DocCode>
+              <p>
                 Must match the browser <code>Origin</code> header and the{" "}
                 <code>origin</code> field in the sign request.
               </p>
@@ -103,16 +144,18 @@ export function SetupPage() {
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Allowed backends</CardTitle>
-              <CardDescription>APIs whose challenges may be signed</CardDescription>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <KeyRound className="h-4 w-4" />
+                Allowed backends
+              </CardTitle>
+              <CardDescription>
+                APIs whose challenges may be signed
+              </CardDescription>
             </CardHeader>
-            <CardContent className="text-sm text-muted-foreground">
-              <p>Examples:</p>
-              <ul className="mt-2 list-inside list-disc space-y-1 font-mono text-xs">
-                <li>http://localhost:8000</li>
-                <li>https://api.example.com</li>
-              </ul>
-              <p className="mt-3">
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              <DocCode title="Examples">{`http://localhost:8000
+https://api.example.com`}</DocCode>
+              <p>
                 Must match the <code>backend</code> field in{" "}
                 <code>POST /sign-challenge</code> exactly.
               </p>
@@ -120,21 +163,18 @@ export function SetupPage() {
           </Card>
         </div>
         <p className="text-sm text-muted-foreground">
-          After saving, the agent restarts automatically. Use the{" "}
-          <strong>Dashboard</strong> to confirm health and provider status.
+          After saving, the agent restarts automatically. Use the Dashboard to
+          confirm health and provider status.
         </p>
-      </section>
+      </SetupStep>
 
       <Separator />
 
-      <section className="space-y-4">
-        <h2 className="text-lg font-semibold">2. Backend API contract</h2>
-        <p className="text-sm text-muted-foreground">
-          Your backend must expose two endpoints. The mock backend in this repo
-          (<code>services/agent/cmd/mock-backend</code>) implements this contract
-          for local development.
-        </p>
-
+      <SetupStep
+        step={2}
+        title="Backend API contract"
+        description="Your backend must expose two endpoints. The mock backend implements this for local development."
+      >
         <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2">
@@ -149,8 +189,7 @@ export function SetupPage() {
               it server-side with a short TTL (60 seconds). One-time use — delete
               after successful verify.
             </p>
-            <DocCode>{`// Response 200
-{
+            <DocCode title="Response 200">{`{
   "challenge": "xK9mP2vQ8nR4wL6jH3fT1yU5bN0cA7dE"
 }`}</DocCode>
           </CardContent>
@@ -170,7 +209,7 @@ export function SetupPage() {
               exists, rebuild the canonical signed payload, check RSA-SHA256
               signature against the certificate, then map identity to a user.
             </p>
-            <DocCode>{`// Request
+            <DocCode title="Request & response">{`// Request
 {
   "challenge": "...",
   "backend": "https://api.example.com",
@@ -193,7 +232,9 @@ export function SetupPage() {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Canonical payload (for verification)</CardTitle>
+            <CardTitle className="text-base">
+              Canonical payload (for verification)
+            </CardTitle>
             <CardDescription>
               The agent signs this JSON — not the raw challenge alone
             </CardDescription>
@@ -204,7 +245,7 @@ export function SetupPage() {
               <code>signedAt</code> from the agent response as{" "}
               <code>timestamp</code>.
             </p>
-            <DocCode>{`{"backend":"https://api.example.com","challenge":"...","origin":"https://app.example.com","purpose":"login","timestamp":"2026-06-14T12:00:00Z"}`}</DocCode>
+            <DocCode title="Signed payload">{`{"backend":"https://api.example.com","challenge":"...","origin":"https://app.example.com","purpose":"login","timestamp":"2026-06-14T12:00:00Z"}`}</DocCode>
             <p className="text-sm text-muted-foreground">
               Verify with RSA PKCS#1 v1.5 + SHA-256 (RS256).{" "}
               <code>signature</code> is base64url; <code>certificate</code> is
@@ -212,17 +253,16 @@ export function SetupPage() {
             </p>
           </CardContent>
         </Card>
-      </section>
+      </SetupStep>
 
       <Separator />
 
-      <section className="space-y-4">
-        <h2 className="text-lg font-semibold">3. Agent API (localhost)</h2>
-        <p className="text-sm text-muted-foreground">
-          Default base URL:{" "}
-          <code className="text-xs">http://127.0.0.1:17443</code>. Only
-          callable from allowed browser origins (CORS).
-        </p>
+      <SetupStep
+        step={3}
+        title="Agent API (localhost)"
+        description="Only callable from allowed browser origins (CORS)."
+      >
+        <CopyField label="Base URL" value={agentUrl} />
 
         <Card>
           <CardHeader className="pb-2">
@@ -236,7 +276,7 @@ export function SetupPage() {
               Required headers: <code>Content-Type: application/json</code>,{" "}
               <code>Origin</code> (set automatically by the browser).
             </p>
-            <DocCode>{`// Request
+            <DocCode title="Request & response">{`// Request
 {
   "challenge": "<from your backend>",
   "backend": "https://api.example.com",
@@ -259,24 +299,24 @@ export function SetupPage() {
             </p>
           </CardContent>
         </Card>
-      </section>
+      </SetupStep>
 
       <Separator />
 
-      <section className="space-y-4">
-        <h2 className="text-lg font-semibold">4. Frontend setup (React)</h2>
-        <p className="text-sm text-muted-foreground">
-          Use the shared client{" "}
-          <code className="text-xs">@rqc-icu/localid-client</code> from this
-          monorepo, or mirror the same fetch calls in your framework.
-        </p>
-
+      <SetupStep
+        step={4}
+        title="Frontend setup (React)"
+        description="Use @rqc-icu/localid-client from this monorepo, or mirror the same fetch calls."
+      >
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Install & configure</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Terminal className="h-4 w-4" />
+              Install & configure
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <DocCode>{`# From repo root
+            <DocCode title="Shell">{`# From repo root
 pnpm install
 
 # Environment (.env)
@@ -286,9 +326,8 @@ VITE_BACKEND_URL=https://api.example.com
 # Run browser demo
 pnpm run dev:react   # http://localhost:5173`}</DocCode>
             <p className="text-sm text-muted-foreground">
-              Add your frontend origin to agent <strong>Allowed origins</strong>{" "}
-              and your API URL to <strong>Allowed backends</strong> before
-              testing.
+              Add your frontend origin to agent Allowed origins and your API URL
+              to Allowed backends before testing.
             </p>
           </CardContent>
         </Card>
@@ -298,7 +337,7 @@ pnpm run dev:react   # http://localhost:5173`}</DocCode>
             <CardTitle className="text-base">Auth handler (minimal)</CardTitle>
           </CardHeader>
           <CardContent>
-            <DocCode>{`import {
+            <DocCode title="TypeScript">{`import {
   fetchChallenge,
   signChallenge,
   verifyProof,
@@ -329,28 +368,27 @@ async function authenticate() {
         </Card>
 
         <p className="text-sm text-muted-foreground">
-          Full working example: <code>examples/react</code> in this repository.
-          Try the <strong>Demo</strong> page here after starting the mock
-          backend on port 8000.
+          Full working example: <code>examples/react</code>. Try the Demo page
+          after starting the mock backend on port 8000.
         </p>
-      </section>
+      </SetupStep>
 
       <Separator />
 
-      <section className="space-y-4">
-        <h2 className="text-lg font-semibold">5. Typed clients (OpenAPI + Orval)</h2>
-        <p className="text-sm text-muted-foreground">
-          OpenAPI specs in <code>openapi/</code> describe the agent and backend
-          HTTP APIs. With <code>server.dev_mode: true</code>, the agent serves
-          its spec at <code>GET /openapi.json</code> for local tooling.
-        </p>
-
+      <SetupStep
+        step={5}
+        title="Typed clients (OpenAPI + Orval)"
+        description="OpenAPI specs describe agent and backend HTTP APIs."
+      >
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Generate from the monorepo</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <BookOpen className="h-4 w-4" />
+              Generate from the monorepo
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <DocCode>{`# Regenerate Orval clients in @rqc-icu/localid-client
+            <DocCode title="Orval">{`# Regenerate Orval clients in @rqc-icu/localid-client
 pnpm generate:api
 
 # Use in your frontend
@@ -364,39 +402,28 @@ const proof = await agentOpenAPI.signChallenge({
   origin: window.location.origin,
 });`}</DocCode>
             <p className="text-sm text-muted-foreground">
-              Or point{" "}
-              <a
-                href="https://orval.dev/"
-                className="underline underline-offset-4"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Orval
-              </a>{" "}
-              at <code>openapi/agent.openapi.yaml</code> or the live{" "}
-              <code>/openapi.json</code> URL. See{" "}
+              With <code>server.dev_mode: true</code>, the agent serves its spec
+              at <code>GET /openapi.json</code>. See{" "}
               <code>packages/localid-client/orval.config.ts</code>.
             </p>
           </CardContent>
         </Card>
-      </section>
+      </SetupStep>
 
       <Separator />
 
-      <section className="space-y-4">
-        <h2 className="text-lg font-semibold">Checklist</h2>
-        <ul className="space-y-2 text-sm">
-          {[
-            "Agent running (Dashboard shows Healthy + Ready)",
-            "Frontend origin added to Allowed origins in Settings",
-            "Backend URL added to Allowed backends in Settings",
-            "Backend implements POST /localid/challenge and POST /localid/verify",
-            "Backend verifies canonical JSON + RS256 signature",
-            "Frontend uses window.location.origin for the origin field",
-            "CORS on your backend allows your frontend origin",
-          ].map((item) => (
-            <li key={item} className="flex items-start gap-2">
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+      <section className="rounded-xl border bg-muted/20 p-6">
+        <h2 className="text-lg font-semibold tracking-tight">Checklist</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Verify each item before going to production.
+        </p>
+        <ul className="mt-4 grid gap-2 sm:grid-cols-2">
+          {CHECKLIST.map((item) => (
+            <li
+              key={item}
+              className="flex items-start gap-2 rounded-lg border bg-card px-3 py-2 text-sm"
+            >
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600/70" />
               <span>{item}</span>
             </li>
           ))}

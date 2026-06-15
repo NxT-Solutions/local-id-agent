@@ -1,5 +1,8 @@
-import { useEffect, useState } from "react";
-import { Save } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Save, Server, Shield, Sliders } from "lucide-react";
+import { AlertBanner } from "@/components/layout/AlertBanner";
+import { CopyField } from "@/components/layout/CopyField";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -18,6 +21,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ActionFeedbackAnchor } from "@/components/ui/action-feedback";
+import { useActionFeedback } from "@/hooks/useActionFeedback";
 import { getConfigPath, readConfig, restartAgent, writeConfig } from "@/lib/tauri";
 
 const PROVIDER_OPTIONS = [
@@ -125,6 +131,10 @@ function buildConfig(form: ConfigForm, existingRaw: string): string {
   );
 }
 
+function countLines(value: string): number {
+  return value.split("\n").map((line) => line.trim()).filter(Boolean).length;
+}
+
 export function SettingsPage() {
   const [configPath, setConfigPath] = useState("");
   const [rawConfig, setRawConfig] = useState("");
@@ -132,6 +142,8 @@ export function SettingsPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const headerSaveFeedback = useActionFeedback();
+  const footerSaveFeedback = useActionFeedback();
 
   useEffect(() => {
     void (async () => {
@@ -149,8 +161,19 @@ export function SettingsPage() {
     })();
   }, []);
 
-  async function handleSave() {
+  const originCount = useMemo(
+    () => (form ? countLines(form.allowedOrigins) : 0),
+    [form],
+  );
+  const backendCount = useMemo(
+    () => (form ? countLines(form.allowedBackends) : 0),
+    [form],
+  );
+
+  async function handleSave(source: "header" | "footer" = "header") {
     if (!form) return;
+
+    const feedback = source === "header" ? headerSaveFeedback : footerSaveFeedback;
 
     setSaving(true);
     setMessage(null);
@@ -162,31 +185,77 @@ export function SettingsPage() {
       await restartAgent();
       setRawConfig(next);
       setMessage("Configuration saved and agent restarted.");
+      feedback.showSuccess("Settings saved");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save config");
+      const message = err instanceof Error ? err.message : "Failed to save config";
+      setError(message);
+      feedback.showError("Save failed");
     } finally {
       setSaving(false);
     }
   }
 
   if (!form) {
-    return <p className="text-sm text-muted-foreground">Loading settings…</p>;
+    return (
+      <div className="space-y-4">
+        <PageHeader
+          title="Settings"
+          description="Loading agent configuration…"
+        />
+        <div className="space-y-4">
+          <Skeleton className="h-32 rounded-xl" />
+          <Skeleton className="h-48 rounded-xl" />
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        <p className="text-sm text-muted-foreground">
-          Edit agent configuration stored at{" "}
-          <code className="rounded bg-muted px-1 py-0.5 text-xs">{configPath}</code>
-        </p>
-      </div>
+    <div className="space-y-8">
+      <PageHeader
+        title="Settings"
+        description="Edit the bundled Go agent configuration. Saving writes to disk and restarts the sidecar automatically."
+        actions={
+          <ActionFeedbackAnchor
+            feedback={headerSaveFeedback.feedback}
+            onOpenChange={headerSaveFeedback.onOpenChange}
+          >
+            <Button
+              onClick={() => void handleSave("header")}
+              disabled={saving}
+              size="sm"
+            >
+              <Save className="h-4 w-4" />
+              {saving ? "Saving…" : "Save & restart"}
+            </Button>
+          </ActionFeedbackAnchor>
+        }
+      />
+
+      {configPath && <CopyField label="Config file" value={configPath} />}
+
+      {message && (
+        <AlertBanner variant="success" title="Saved">
+          {message} Check the Dashboard to confirm health and provider readiness.
+        </AlertBanner>
+      )}
+
+      {error && (
+        <AlertBanner variant="error" title="Save failed">
+          {error}
+        </AlertBanner>
+      )}
 
       <Card>
         <CardHeader>
-          <CardTitle>Server</CardTitle>
-          <CardDescription>Local bind address for the agent HTTP API</CardDescription>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Server className="h-4 w-4" />
+            Server
+          </CardTitle>
+          <CardDescription>
+            Local bind address for the agent HTTP API (default{" "}
+            <code className="font-mono text-xs">127.0.0.1:17443</code>)
+          </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
@@ -198,6 +267,9 @@ export function SettingsPage() {
                 setForm({ ...form, host: event.target.value })
               }
             />
+            <p className="text-xs text-muted-foreground">
+              Loopback only — do not expose to the network.
+            </p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="port">Port</Label>
@@ -215,36 +287,70 @@ export function SettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Security</CardTitle>
-          <CardDescription>One origin or backend URL per line</CardDescription>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Shield className="h-4 w-4" />
+            Security allowlists
+          </CardTitle>
+          <CardDescription>
+            Exact string match — scheme + host + port, no wildcards, no trailing
+            slash. One entry per line.
+          </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="origins">Allowed origins</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="origins">Allowed origins</Label>
+              <span className="text-xs text-muted-foreground">
+                {originCount} entries
+              </span>
+            </div>
             <Textarea
               id="origins"
+              className="min-h-[140px] font-mono text-xs"
+              placeholder={"http://localhost:5173\ntauri://localhost"}
               value={form.allowedOrigins}
               onChange={(event) =>
                 setForm({ ...form, allowedOrigins: event.target.value })
               }
             />
+            <p className="text-xs text-muted-foreground">
+              Must match the browser <code>Origin</code> header and sign request{" "}
+              <code>origin</code> field.
+            </p>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="backends">Allowed backends</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="backends">Allowed backends</Label>
+              <span className="text-xs text-muted-foreground">
+                {backendCount} entries
+              </span>
+            </div>
             <Textarea
               id="backends"
+              className="min-h-[140px] font-mono text-xs"
+              placeholder={"http://localhost:8000\nhttps://api.example.com"}
               value={form.allowedBackends}
               onChange={(event) =>
                 setForm({ ...form, allowedBackends: event.target.value })
               }
             />
+            <p className="text-xs text-muted-foreground">
+              Must match the <code>backend</code> field in{" "}
+              <code>POST /sign-challenge</code> exactly.
+            </p>
           </div>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Providers & logging</CardTitle>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Sliders className="h-4 w-4" />
+            Providers & logging
+          </CardTitle>
+          <CardDescription>
+            Default signing provider and log verbosity for the sidecar process.
+          </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
@@ -266,6 +372,12 @@ export function SettingsPage() {
                 ))}
               </SelectContent>
             </Select>
+            {form.defaultProvider === "belgian_eid" && (
+              <p className="text-xs text-muted-foreground">
+                Requires a Belgian eID card reader and middleware. Insert card
+                before signing.
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="log-level">Log level</Label>
@@ -288,13 +400,19 @@ export function SettingsPage() {
         </CardContent>
       </Card>
 
-      <div className="flex items-center gap-3">
-        <Button onClick={() => void handleSave()} disabled={saving}>
-          <Save className="h-4 w-4" />
-          {saving ? "Saving…" : "Save & restart"}
-        </Button>
-        {message && <p className="text-sm text-emerald-600">{message}</p>}
-        {error && <p className="text-sm text-destructive">{error}</p>}
+      <div className="flex items-center gap-3 border-t pt-4">
+        <ActionFeedbackAnchor
+          feedback={footerSaveFeedback.feedback}
+          onOpenChange={footerSaveFeedback.onOpenChange}
+        >
+          <Button onClick={() => void handleSave("footer")} disabled={saving}>
+            <Save className="h-4 w-4" />
+            {saving ? "Saving…" : "Save & restart"}
+          </Button>
+        </ActionFeedbackAnchor>
+        <p className="text-xs text-muted-foreground">
+          Changes take effect after the sidecar restarts (~1s).
+        </p>
       </div>
     </div>
   );
