@@ -16,6 +16,7 @@ const AGENT_FETCH_TIMEOUT_SECS: u64 = 4;
 const AGENT_FETCH_SIGN_TIMEOUT_SECS: u64 = 120;
 const REQUIRED_ALLOWED_ORIGINS: [&str; 2] = ["tauri://localhost", "http://localhost:1420"];
 const REQUIRED_ALLOWED_BACKENDS: [&str; 1] = ["http://localhost:8000"];
+const ALLOWED_AGENT_PATHS: [&str; 3] = ["/health", "/status", "/sign-challenge"];
 const FALLBACK_PROVIDER: &str = "mock";
 
 struct AgentProcess(Mutex<Option<CommandChild>>);
@@ -294,6 +295,19 @@ fn agent_fetch_timeout(method: &str, path: &str) -> std::time::Duration {
     }
 }
 
+fn validate_agent_path(path: &str) -> Result<String, String> {
+    if !path.starts_with('/') {
+        return Err("agent path must start with '/'".to_string());
+    }
+
+    let path_only = path.split('?').next().unwrap_or(path);
+    if ALLOWED_AGENT_PATHS.contains(&path_only) {
+        Ok(path.to_string())
+    } else {
+        Err("agent path is not allowed".to_string())
+    }
+}
+
 #[tauri::command]
 fn agent_fetch(
     method: String,
@@ -301,9 +315,7 @@ fn agent_fetch(
     body: Option<String>,
     origin: Option<String>,
 ) -> Result<AgentFetchResponse, String> {
-    if !path.starts_with('/') {
-        return Err("agent path must start with '/'".to_string());
-    }
+    let path = validate_agent_path(&path)?;
 
     let url = format!("{AGENT_BASE_URL}{path}");
     let timeout = agent_fetch_timeout(&method, &path);

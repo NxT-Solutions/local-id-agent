@@ -2,7 +2,7 @@
   "server": {
     "host": "127.0.0.1",
     "port": 17443,
-    "dev_mode": true
+    "dev_mode": false
   },
   "security": {
     "allowed_origins": [
@@ -15,7 +15,8 @@
       "http://localhost:8000",
       "https://api.example.com"
     ],
-    "challenge_max_age_seconds": 60
+    "challenge_max_age_seconds": 60,
+    "production": true
   },
   "providers": {
     "default": "belgian_eid",
