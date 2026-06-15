@@ -2,14 +2,17 @@ package main
 
 import (
 	"crypto"
+	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/sha512"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/big"
 	"net/http"
 	"slices"
 	"sync"
@@ -160,7 +163,7 @@ func (s *server) handleVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Algorithm != "RS256" {
+	if !slices.Contains([]string{"RS256", "ES256", "ES384"}, req.Algorithm) {
 		writeError(w, http.StatusForbidden, "unsupported algorithm")
 		return
 	}
@@ -204,7 +207,7 @@ func (s *server) handleVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	publicKey, err := parseCertificatePublicKey(req.Certificate)
+	cert, err := parseCertificate(req.Certificate)
 	if err != nil {
 		writeError(w, http.StatusForbidden, err.Error())
 		return
@@ -216,8 +219,7 @@ func (s *server) handleVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hash := sha256.Sum256(payload)
-	if err := rsa.VerifyPKCS1v15(publicKey, crypto.SHA256, hash[:], signature); err != nil {
+	if err := verifyProofSignature(req.Algorithm, cert, payload, signature); err != nil {
 		writeError(w, http.StatusForbidden, "signature verification failed")
 		return
 	}
@@ -231,7 +233,7 @@ func (s *server) handleVerify(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func parseCertificatePublicKey(certB64 string) (*rsa.PublicKey, error) {
+func parseCertificate(certB64 string) (*x509.Certificate, error) {
 	if certB64 == "" {
 		return nil, fmt.Errorf("certificate is required")
 	}
@@ -246,12 +248,52 @@ func parseCertificatePublicKey(certB64 string) (*rsa.PublicKey, error) {
 		return nil, fmt.Errorf("invalid certificate")
 	}
 
-	publicKey, ok := cert.PublicKey.(*rsa.PublicKey)
-	if !ok {
-		return nil, fmt.Errorf("certificate public key is not RSA")
+	return cert, nil
+}
+
+func verifyProofSignature(algorithm string, cert *x509.Certificate, payload, signature []byte) error {
+	switch algorithm {
+	case "RS256":
+		publicKey, ok := cert.PublicKey.(*rsa.PublicKey)
+		if !ok {
+			return fmt.Errorf("certificate public key is not RSA")
+		}
+		hash := sha256.Sum256(payload)
+		return rsa.VerifyPKCS1v15(publicKey, crypto.SHA256, hash[:], signature)
+	case "ES256":
+		publicKey, ok := cert.PublicKey.(*ecdsa.PublicKey)
+		if !ok {
+			return fmt.Errorf("certificate public key is not ECDSA")
+		}
+		hash := sha256.Sum256(payload)
+		if verifyRawECDSA(publicKey, hash[:], signature) {
+			return nil
+		}
+		return fmt.Errorf("invalid ES256 signature")
+	case "ES384":
+		publicKey, ok := cert.PublicKey.(*ecdsa.PublicKey)
+		if !ok {
+			return fmt.Errorf("certificate public key is not ECDSA")
+		}
+		hash := sha512.Sum384(payload)
+		if verifyRawECDSA(publicKey, hash[:], signature) {
+			return nil
+		}
+		return fmt.Errorf("invalid ES384 signature")
+	default:
+		return fmt.Errorf("unsupported algorithm")
+	}
+}
+
+func verifyRawECDSA(publicKey *ecdsa.PublicKey, hash, signature []byte) bool {
+	size := (publicKey.Curve.Params().BitSize + 7) / 8
+	if len(signature) != 2*size {
+		return false
 	}
 
-	return publicKey, nil
+	r := new(big.Int).SetBytes(signature[:size])
+	s := new(big.Int).SetBytes(signature[size:])
+	return ecdsa.Verify(publicKey, hash, r, s)
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {

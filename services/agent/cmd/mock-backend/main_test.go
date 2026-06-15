@@ -3,14 +3,10 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -128,7 +124,7 @@ func TestHandleVerify(t *testing.T) {
 		s := &server{challenges: newChallengeCache(), freshness: security.NewChallengeFreshnessValidator(60)}
 		req := validVerifyRequest(t, "YWJj")
 		s.challenges.put(req.Challenge)
-		req.Algorithm = "ES256"
+		req.Algorithm = "HS256"
 		rec := mustDoVerify(t, s, req)
 		assert.Equal(t, http.StatusForbidden, rec.Code)
 	})
@@ -224,40 +220,23 @@ func TestHandleVerify(t *testing.T) {
 	})
 }
 
-func TestParseCertificatePublicKey(t *testing.T) {
-	_, err := parseCertificatePublicKey("")
+func TestParseCertificate(t *testing.T) {
+	_, err := parseCertificate("")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "certificate is required")
 
-	_, err = parseCertificatePublicKey("invalid")
+	_, err = parseCertificate("invalid")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "valid base64")
 
-	_, err = parseCertificatePublicKey(base64.StdEncoding.EncodeToString([]byte("not cert")))
+	_, err = parseCertificate(base64.StdEncoding.EncodeToString([]byte("not cert")))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid certificate")
 
-	ecdsaKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err)
-	der, err := x509.CreateCertificate(rand.Reader, &x509.Certificate{
-		SerialNumber: big.NewInt(1),
-		NotBefore:    time.Now().Add(-time.Hour),
-		NotAfter:     time.Now().Add(time.Hour),
-	}, &x509.Certificate{
-		SerialNumber: big.NewInt(1),
-		NotBefore:    time.Now().Add(-time.Hour),
-		NotAfter:     time.Now().Add(time.Hour),
-	}, &ecdsaKey.PublicKey, ecdsaKey)
-	require.NoError(t, err)
-
-	_, err = parseCertificatePublicKey(base64.StdEncoding.EncodeToString(der))
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not RSA")
-
 	validReq := validVerifyRequest(t, "YWJj")
-	pub, err := parseCertificatePublicKey(validReq.Certificate)
+	cert, err := parseCertificate(validReq.Certificate)
 	require.NoError(t, err)
-	assert.NotNil(t, pub)
+	assert.NotNil(t, cert.PublicKey)
 }
 
 func TestWriteHelpers(t *testing.T) {
