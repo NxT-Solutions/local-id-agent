@@ -191,6 +191,8 @@ See [examples/README.md](examples/README.md) for setup details per stack.
 
 Native cross-platform app. Bundles the Go agent as a sidecar, system tray, settings UI.
 
+![LocalID Agent desktop dashboard](docs/assets/Dashboard.png)
+
 **One-time:** build the Go sidecar binary for your OS:
 
 ```bash
