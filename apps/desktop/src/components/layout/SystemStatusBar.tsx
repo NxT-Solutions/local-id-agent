@@ -94,11 +94,43 @@ export function SystemStatusBar() {
   }, [refresh]);
 
   return (
-    <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 overflow-x-hidden border-b bg-background px-3 py-2 sm:px-4">
-      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+    <div className="flex min-w-0 flex-col gap-2 overflow-x-hidden border-b bg-background px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3 md:px-4">
+      <div className="flex items-center justify-between gap-2 sm:contents">
         <span className="shrink-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Endpoints
         </span>
+        <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground sm:order-3">
+          {lastChecked && (
+            <span
+              className={cn(
+                "max-w-[9rem] truncate whitespace-nowrap sm:max-w-none",
+                isBackgroundPolling && "animate-pulse",
+              )}
+              title={`Updated ${lastChecked}`}
+            >
+              Updated {lastChecked}
+            </span>
+          )}
+          <ActionFeedbackAnchor
+            feedback={refreshFeedback.feedback}
+            onOpenChange={refreshFeedback.onOpenChange}
+            hoverLabel="Refresh endpoint status"
+          >
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2"
+              onClick={handleManualRefresh}
+              aria-label="Refresh endpoint status"
+            >
+              <RefreshCw
+                className={cn("h-3.5 w-3.5", refreshSpinning && "animate-spin")}
+              />
+            </Button>
+          </ActionFeedbackAnchor>
+        </div>
+      </div>
+      <div className="flex min-w-0 flex-wrap items-center gap-2 sm:order-2 sm:min-w-0 sm:flex-1">
         <EndpointBadge
           label="Agent"
           url={getAgentUrl()}
@@ -111,35 +143,6 @@ export function SystemStatusBar() {
           status={backendStatus}
           refreshing={isBackgroundPolling || isManualRefreshing}
         />
-      </div>
-      <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-        {lastChecked && (
-          <span
-            className={cn(
-              "hidden whitespace-nowrap sm:inline",
-              isBackgroundPolling && "animate-pulse",
-            )}
-          >
-            Updated {lastChecked}
-          </span>
-        )}
-        <ActionFeedbackAnchor
-          feedback={refreshFeedback.feedback}
-          onOpenChange={refreshFeedback.onOpenChange}
-          hoverLabel="Refresh endpoint status"
-        >
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2"
-            onClick={handleManualRefresh}
-            aria-label="Refresh endpoint status"
-          >
-            <RefreshCw
-              className={cn("h-3.5 w-3.5", refreshSpinning && "animate-spin")}
-            />
-          </Button>
-        </ActionFeedbackAnchor>
       </div>
     </div>
   );

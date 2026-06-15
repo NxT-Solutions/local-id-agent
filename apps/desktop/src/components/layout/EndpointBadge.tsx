@@ -38,7 +38,7 @@ export function EndpointBadge({
     <HoverTooltip label={tooltipLabel} side="bottom">
       <div
         className={cn(
-          "flex min-w-0 max-w-full items-center gap-2 rounded-md border bg-card px-2.5 py-1.5 text-xs transition-opacity duration-300 sm:max-w-xs lg:max-w-sm",
+          "flex min-w-0 items-center gap-1.5 rounded-md border bg-card px-2 py-1 text-xs transition-opacity duration-300 md:gap-2 md:px-2.5 md:py-1.5 md:max-w-xs lg:max-w-sm",
           refreshing && status !== "checking" && "opacity-80",
           className,
         )}
@@ -56,8 +56,11 @@ export function EndpointBadge({
           aria-hidden
         />
         <span className="shrink-0 font-medium text-muted-foreground">{label}</span>
-        <span className="hidden h-3 w-px shrink-0 bg-border md:block" />
-        <code className="min-w-0 flex-1 truncate font-mono" title={url}>
+        <span className="hidden h-3 w-px shrink-0 bg-border md:block" aria-hidden />
+        <code
+          className="hidden min-w-0 truncate font-mono text-muted-foreground md:block"
+          title={url}
+        >
           {url}
         </code>
         <span className="sr-only">{statusLabels[status]}</span>
