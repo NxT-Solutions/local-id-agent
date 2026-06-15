@@ -76,7 +76,9 @@ func TestProviderStatusAndSign(t *testing.T) {
 	t.Run("sign delegates and rewrites provider", func(t *testing.T) {
 		p, err := New(config.BelgianEIDConfig{})
 		require.NoError(t, err)
-		p.newPKCS11 = func(config.PKCS11Config) (pkcs11Provider, error) {
+		var captured config.PKCS11Config
+		p.newPKCS11 = func(pkcs11Cfg config.PKCS11Config) (pkcs11Provider, error) {
+			captured = pkcs11Cfg
 			return &fakePKCS11Provider{
 				signResp: &protocol.SignChallengeResponse{
 					Provider:  "pkcs11",
@@ -90,6 +92,7 @@ func TestProviderStatusAndSign(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "belgian_eid", resp.Provider)
 		assert.Equal(t, "RS256", resp.Algorithm)
+		assert.Equal(t, "Signature", captured.CertificateLabel)
 	})
 
 	t.Run("sign returns delegate error", func(t *testing.T) {

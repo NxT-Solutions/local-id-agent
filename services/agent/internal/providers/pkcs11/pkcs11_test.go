@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"errors"
@@ -169,6 +170,7 @@ func TestStatus(t *testing.T) {
 		require.NoError(t, err)
 		assert.False(t, status.Ready)
 		assert.False(t, status.CardPresent)
+		assert.Equal(t, "missing", status.Message)
 	})
 
 	t.Run("returns unavailable when slot scan fails", func(t *testing.T) {
@@ -185,6 +187,7 @@ func TestStatus(t *testing.T) {
 		require.NoError(t, err)
 		assert.False(t, status.Ready)
 		assert.False(t, status.CardPresent)
+		assert.Contains(t, status.Message, "slot failure")
 	})
 
 	t.Run("returns unavailable when module open fails", func(t *testing.T) {
@@ -199,6 +202,27 @@ func TestStatus(t *testing.T) {
 		require.NoError(t, err)
 		assert.False(t, status.Ready)
 		assert.False(t, status.CardPresent)
+		assert.Contains(t, status.Message, "factory failed")
+	})
+
+	t.Run("ready when token initialized without present flag", func(t *testing.T) {
+		p := &Provider{
+			cfg:         config.PKCS11Config{},
+			resolvePath: func(string) (string, error) { return "/module.so", nil },
+			moduleFactory: func(string) (module, error) {
+				return &fakeModule{
+					getSlotListFn: func(bool) ([]uint, error) { return []uint{1}, nil },
+					getTokenInfoFn: func(uint) (p11.TokenInfo, error) {
+						return p11.TokenInfo{Flags: p11.CKF_TOKEN_INITIALIZED}, nil
+					},
+				}, nil
+			},
+		}
+		status, err := p.Status(context.Background())
+		require.NoError(t, err)
+		assert.True(t, status.Ready)
+		assert.True(t, status.CardPresent)
+		assert.Empty(t, status.Message)
 	})
 
 	t.Run("ready when token present", func(t *testing.T) {
@@ -218,6 +242,7 @@ func TestStatus(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, status.Ready)
 		assert.True(t, status.CardPresent)
+		assert.Empty(t, status.Message)
 	})
 }
 
@@ -643,7 +668,7 @@ func TestHelpers(t *testing.T) {
 
 	t.Run("load signing material error paths", func(t *testing.T) {
 		p := &Provider{}
-		_, _, err := p.loadSigningMaterial(&fakeModule{
+		_, _, _, err := p.loadSigningMaterial(&fakeModule{
 			findObjectsFn: func(p11.SessionHandle, int) ([]p11.ObjectHandle, bool, error) {
 				return []p11.ObjectHandle{1}, false, nil
 			},
@@ -654,7 +679,7 @@ func TestHelpers(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "read certificate attributes")
 
-		_, _, err = p.loadSigningMaterial(&fakeModule{
+		_, _, _, err = p.loadSigningMaterial(&fakeModule{
 			findObjectsFn: func(p11.SessionHandle, int) ([]p11.ObjectHandle, bool, error) {
 				return []p11.ObjectHandle{1}, false, nil
 			},
@@ -665,7 +690,7 @@ func TestHelpers(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "CKA_VALUE is empty")
 
-		_, _, err = p.loadSigningMaterial(&fakeModule{
+		_, _, _, err = p.loadSigningMaterial(&fakeModule{
 			findObjectsFn: func(p11.SessionHandle, int) ([]p11.ObjectHandle, bool, error) {
 				return []p11.ObjectHandle{1}, false, nil
 			},
@@ -679,7 +704,7 @@ func TestHelpers(t *testing.T) {
 		assert.Contains(t, err.Error(), "parse certificate DER")
 
 		call := 0
-		_, _, err = p.loadSigningMaterial(&fakeModule{
+		_, _, _, err = p.loadSigningMaterial(&fakeModule{
 			findObjectsFn: func(p11.SessionHandle, int) ([]p11.ObjectHandle, bool, error) {
 				call++
 				if call == 1 {
@@ -698,7 +723,7 @@ func TestHelpers(t *testing.T) {
 
 		p.cfg.CertificateLabel = "sign-cert"
 		call = 0
-		_, _, err = p.loadSigningMaterial(&fakeModule{
+		_, _, _, err = p.loadSigningMaterial(&fakeModule{
 			findObjectsFn: func(p11.SessionHandle, int) ([]p11.ObjectHandle, bool, error) {
 				call++
 				if call == 1 {
@@ -723,12 +748,39 @@ func TestHelpers(t *testing.T) {
 		assert.Equal(t, []byte("abc"), value)
 	})
 
+	t.Run("sign payload falls back when SHA256_RSA_PKCS unsupported", func(t *testing.T) {
+		p := &Provider{}
+		initCalls := 0
+		var signedPayload []byte
+
+		sig, err := p.signRSAPayload(&fakeModule{
+			signInitFn: func(_ p11.SessionHandle, mech []*p11.Mechanism, _ p11.ObjectHandle) error {
+				initCalls++
+				if initCalls == 1 {
+					assert.Equal(t, uint(p11.CKM_SHA256_RSA_PKCS), mech[0].Mechanism)
+					return p11.Error(p11.CKR_MECHANISM_INVALID)
+				}
+				assert.Equal(t, uint(p11.CKM_RSA_PKCS), mech[0].Mechanism)
+				return nil
+			},
+			signFn: func(_ p11.SessionHandle, payload []byte) ([]byte, error) {
+				signedPayload = payload
+				return []byte("signature"), nil
+			},
+		}, 1, 1, []byte("payload"))
+		require.NoError(t, err)
+		assert.Equal(t, []byte("signature"), sig)
+		assert.Equal(t, 2, initCalls)
+		require.Len(t, signedPayload, len(sha256DigestInfoPrefix)+sha256.Size)
+		assert.Equal(t, sha256DigestInfoPrefix, signedPayload[:len(sha256DigestInfoPrefix)])
+	})
+
 	t.Run("sign payload and sign with pin errors", func(t *testing.T) {
 		p := &Provider{
 			cfg:     config.PKCS11Config{PINPrompt: "terminal"},
 			readPIN: func() string { return "1234" },
 		}
-		_, err := p.signPayload(&fakeModule{
+		_, err := p.signRSAPayload(&fakeModule{
 			signInitFn: func(p11.SessionHandle, []*p11.Mechanism, p11.ObjectHandle) error {
 				return errors.New("init")
 			},
@@ -739,7 +791,7 @@ func TestHelpers(t *testing.T) {
 			loginFn: func(p11.SessionHandle, uint, string) error {
 				return errors.New("login")
 			},
-		}, 1, 1, []byte("payload"))
+		}, 1, 1, "RS256", []byte("payload"))
 		require.Error(t, err)
 
 		_, err = p.signWithPIN(&fakeModule{
@@ -749,7 +801,7 @@ func TestHelpers(t *testing.T) {
 			signFn: func(p11.SessionHandle, []byte) ([]byte, error) {
 				return []byte("ok"), nil
 			},
-		}, 1, 1, []byte("payload"))
+		}, 1, 1, "RS256", []byte("payload"))
 		require.NoError(t, err)
 	})
 

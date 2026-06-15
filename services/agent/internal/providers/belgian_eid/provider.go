@@ -69,9 +69,10 @@ func (p *Provider) SignChallenge(ctx context.Context, req protocol.SignChallenge
 
 func (p *Provider) newDelegate() (pkcs11Provider, error) {
 	delegate, err := p.newPKCS11(config.PKCS11Config{
-		Enabled:    true,
-		ModulePath: p.effectiveModulePath(),
-		PINPrompt:  "terminal",
+		Enabled:          true,
+		ModulePath:       p.effectiveModulePath(),
+		CertificateLabel: "Signature",
+		PINPrompt:        "terminal",
 	})
 	if err != nil {
 		return nil, fmt.Errorf("initialize PKCS#11 provider: %w", err)
