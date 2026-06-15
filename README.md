@@ -76,7 +76,8 @@ Run from repo root and choose one mode:
 
 - Stops Docker **frontend** and **agent** containers (`frontend`, `agent`, `agent-eid`, `agent-pkcs11`); keeps **backend** on `:8000`.
 - Builds sidecar (unless `--skip-sidecar-build` is passed to the script directly).
-- Launches the **Tauri desktop app** with `LOCALID_PKCS11_PIN` exported — **not** the browser at `http://localhost:5173`.
+- Starts the **React dev server** on `http://localhost:5173` (browser demo; uses the Tauri host sidecar on `:17443`).
+- Launches the **Tauri desktop app** with `LOCALID_PKCS11_PIN` exported (`http://localhost:1420`).
 - First run copies `config.desktop.json` with `belgian_eid` as the default provider; if you used the app before, open **Settings → Belgian eID → Save**, then use the **Demo** tab.
 
 Example:
@@ -85,7 +86,22 @@ Example:
 LOCALID_PKCS11_PIN=1234 pnpm demo:native-eid
 ```
 
-If a browser tab at `:5173` still shows **Provider: mock (ready)**, you are on the Docker/browser demo from an earlier `docker:demo` or `demo:docker-eid` run — close that tab and use the Tauri window instead, or run `pnpm demo:stop` first.
+The demo script auto-discovers the Belgian eID PKCS#11 module. On macOS after installing [Belgian eID middleware](https://eid.belgium.be/en), the library is typically at:
+
+```bash
+/Library/Belgium Identity Card/Pkcs11/libbeidpkcs11.dylib
+```
+
+Override only if auto-discovery fails:
+
+```bash
+LOCALID_BEID_PKCS11_MODULE="/Library/Belgium Identity Card/Pkcs11/libbeidpkcs11.dylib" \
+LOCALID_PKCS11_PIN=1234 pnpm demo:native-eid
+```
+
+Do **not** use placeholder paths like `/path/to/libbeidpkcs11.dylib` — the sidecar inherits `LOCALID_BEID_PKCS11_MODULE` from your shell and will fail module loading.
+
+If a browser tab at `:5173` shows **Provider: mock (ready)** while using native eID, the page may be stale from an earlier `docker:demo` / `demo:docker-eid` run — hard-refresh or run `pnpm demo:stop` and restart `demo:native-eid`. The React dev server on `:5173` talks to the **host sidecar** (`:17443`), not the Docker mock agent.
 
 ### Mode 2: `pnpm demo:docker-eid`
 
@@ -274,6 +290,7 @@ Run from the **repository root** unless noted.
 | 403 from `/sign-challenge` | Origin must match `security.allowed_origins` exactly (e.g. `http://localhost:5173` or `tauri://localhost`) |
 | Verify failed in demo | Restart mock backend; challenges expire after 60s and are one-time use |
 | Desktop sidecar won't start | Run `pnpm run build:sidecar` after agent code changes |
+| **Provider: belgian_eid, Not ready, Card present: No** (card works on eid.belgium.be) | Do not set `LOCALID_BEID_PKCS11_MODULE=/path/to/...` placeholders. Unset it or use the real macOS path (`/Library/Belgium Identity Card/Pkcs11/libbeidpkcs11.dylib`), run `pnpm run build:sidecar`, then **Restart agent** in the desktop app. Check `GET /status` for a `message` field. |
 | Types out of sync | Run `pnpm generate` after editing `proto/` |
 | OpenAPI / Orval out of sync | Run `pnpm generate:api` after editing `openapi/` |
 

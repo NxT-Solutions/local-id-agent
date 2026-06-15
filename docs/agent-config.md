@@ -31,7 +31,7 @@ Copy `services/agent/config.example.json` and adjust:
 - `security.allowed_backends` — exact backend URLs whose challenges may be signed
 - `providers.default` — choose `mock`, `pkcs11`, or `belgian_eid`
 - `providers.pkcs11.pin_prompt = "terminal"` reads PIN from `LOCALID_PKCS11_PIN` when token login is required
-- `LOCALID_BEID_PKCS11_MODULE` can override Belgian eID auto module detection
+- `LOCALID_BEID_PKCS11_MODULE` can override Belgian eID auto module detection (macOS default: `/Library/Belgium Identity Card/Pkcs11/libbeidpkcs11.dylib`)
 
 ## Mock backend
 

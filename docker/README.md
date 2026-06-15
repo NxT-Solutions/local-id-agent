@@ -183,7 +183,7 @@ If you publish different host ports, update both frontend runtime URLs and these
 
 - `GET /status` now returns `200` even when no card is inserted, with `ready=false` and `cardPresent=false`.
 - Set `LOCALID_PKCS11_PIN` when the token prompts for PIN (recommended for container/non-interactive runs).
-- Belgian eID module auto-discovery checks common paths (Linux and macOS). Override with `LOCALID_BEID_PKCS11_MODULE` if needed.
+- Belgian eID module auto-discovery checks common paths (Linux and macOS). On macOS after installing Belgian eID middleware, the library is at `/Library/Belgium Identity Card/Pkcs11/libbeidpkcs11.dylib`. Override with `LOCALID_BEID_PKCS11_MODULE` if needed.
 - Generic PKCS#11 profile supports `module_path`, `token_label`, and `certificate_label` in config.
 - You still need host smartcard middleware, reachable `pcscd`, and a readable PKCS#11 module in the container.
 
