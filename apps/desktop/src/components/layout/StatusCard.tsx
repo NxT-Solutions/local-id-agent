@@ -57,7 +57,7 @@ export function StatusCard({
               </div>
             </HoverTooltip>
             <div className="min-w-0 space-y-1">
-              <CardTitle className="text-base">{title}</CardTitle>
+              <CardTitle className="break-words text-base">{title}</CardTitle>
               {description && (
                 <CardDescription className="break-words">
                   {description}

@@ -182,7 +182,7 @@ export function AboutPage() {
         </AlertBanner>
       )}
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid min-w-0 gap-4 lg:grid-cols-2 xl:grid-cols-3">
         {awaitingFirstData ? (
           Array.from({ length: 3 }, (_, index) => (
             <Card key={index} className="overflow-hidden">
@@ -219,7 +219,7 @@ export function AboutPage() {
                 </Badge>
               }
             >
-              <p className="text-sm text-muted-foreground">
+              <p className="break-words text-sm text-muted-foreground">
                 Managed by the Tauri shell. Restart from Dashboard or after saving
                 Settings.
               </p>
@@ -290,7 +290,7 @@ export function AboutPage() {
                 </Badge>
               }
             >
-              <p className="text-sm text-muted-foreground">
+              <p className="break-words text-sm text-muted-foreground">
                 Check Dashboard for card presence and provider-specific messages.
               </p>
             </StatusCard>
@@ -346,12 +346,12 @@ export function AboutPage() {
           ].map((resource) => (
             <div
               key={resource.path}
-              className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2.5 text-sm"
+              className="flex min-w-0 flex-col gap-1 rounded-lg border bg-muted/30 px-3 py-2.5 text-sm sm:flex-row sm:items-center sm:justify-between"
             >
-              <span>{resource.label}</span>
-              <code className="flex items-center gap-1 font-mono text-xs text-muted-foreground">
-                {resource.path}
-                <ExternalLink className="h-3 w-3 opacity-50" />
+              <span className="shrink-0">{resource.label}</span>
+              <code className="flex min-w-0 items-center gap-1 truncate font-mono text-xs text-muted-foreground">
+                <span className="truncate">{resource.path}</span>
+                <ExternalLink className="h-3 w-3 shrink-0 opacity-50" />
               </code>
             </div>
           ))}
