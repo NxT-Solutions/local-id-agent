@@ -8,6 +8,7 @@ import {
   Shield,
 } from "lucide-react";
 import { SystemStatusBar } from "@/components/layout/SystemStatusBar";
+import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
@@ -71,8 +72,9 @@ export function AppLayout() {
             ))}
           </nav>
 
-          <div className="hidden shrink-0 border-t bg-card px-4 py-3 md:block">
-            <p className="text-[0.6875rem] leading-relaxed text-muted-foreground">
+          <div className="shrink-0 border-t bg-card p-2 md:px-4 md:py-3">
+            <ThemeSwitcher />
+            <p className="mt-2 hidden text-[0.6875rem] leading-relaxed text-muted-foreground md:block">
               Signs challenges locally. Does not issue sessions or tokens.
             </p>
           </div>

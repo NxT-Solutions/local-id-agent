@@ -104,4 +104,14 @@
   .animate-spin-reverse {
     animation: spin-reverse 1s linear infinite;
   }
+
+  @keyframes spin-once {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .animate-spin-once {
+    animation: spin-once 0.45s ease-in-out;
+  }
 }
