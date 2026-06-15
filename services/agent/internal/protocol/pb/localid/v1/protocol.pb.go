@@ -177,10 +177,12 @@ func (x *SignChallengeResponse) GetSignedAt() string {
 
 // Status is returned by GET /status.
 type Status struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Provider      string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"`
-	Ready         bool                   `protobuf:"varint,2,opt,name=ready,proto3" json:"ready,omitempty"`
-	CardPresent   bool                   `protobuf:"varint,3,opt,name=cardPresent,proto3" json:"cardPresent,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Provider    string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"`
+	Ready       bool                   `protobuf:"varint,2,opt,name=ready,proto3" json:"ready,omitempty"`
+	CardPresent bool                   `protobuf:"varint,3,opt,name=cardPresent,proto3" json:"cardPresent,omitempty"`
+	// Human-readable detail when ready/cardPresent is false (e.g. missing PKCS#11 module).
+	Message       string `protobuf:"bytes,4,opt,name=message,proto3" json:"message,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -234,6 +236,13 @@ func (x *Status) GetCardPresent() bool {
 		return x.CardPresent
 	}
 	return false
+}
+
+func (x *Status) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
 }
 
 // HealthResponse is returned by GET /health.
@@ -314,11 +323,12 @@ const file_localid_v1_protocol_proto_rawDesc = "" +
 	"\tchallenge\x18\x03 \x01(\tR\tchallenge\x12\x1c\n" +
 	"\tsignature\x18\x04 \x01(\tR\tsignature\x12 \n" +
 	"\vcertificate\x18\x05 \x01(\tR\vcertificate\x12\x1a\n" +
-	"\bsignedAt\x18\x06 \x01(\tR\bsignedAt\"\\\n" +
+	"\bsignedAt\x18\x06 \x01(\tR\bsignedAt\"v\n" +
 	"\x06Status\x12\x1a\n" +
 	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x14\n" +
 	"\x05ready\x18\x02 \x01(\bR\x05ready\x12 \n" +
-	"\vcardPresent\x18\x03 \x01(\bR\vcardPresent\"N\n" +
+	"\vcardPresent\x18\x03 \x01(\bR\vcardPresent\x12\x18\n" +
+	"\amessage\x18\x04 \x01(\tR\amessage\"N\n" +
 	"\x0eHealthResponse\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x18\n" +

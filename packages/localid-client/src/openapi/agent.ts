@@ -20,6 +20,8 @@ export interface Status {
   provider: string;
   ready: boolean;
   cardPresent: boolean;
+  /** Human-readable detail when the provider is not ready */
+  message?: string;
 }
 
 export type SignChallengeRequestPurpose = typeof SignChallengeRequestPurpose[keyof typeof SignChallengeRequestPurpose];

@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file localid/v1/protocol.proto.
  */
 export const file_localid_v1_protocol: GenFile = /*@__PURE__*/
-  fileDesc("Chlsb2NhbGlkL3YxL3Byb3RvY29sLnByb3RvEgpsb2NhbGlkLnYxIlsKFFNpZ25DaGFsbGVuZ2VSZXF1ZXN0EhEKCWNoYWxsZW5nZRgBIAEoCRIPCgdiYWNrZW5kGAIgASgJEg8KB3B1cnBvc2UYAyABKAkSDgoGb3JpZ2luGAQgASgJIokBChVTaWduQ2hhbGxlbmdlUmVzcG9uc2USEAoIcHJvdmlkZXIYASABKAkSEQoJYWxnb3JpdGhtGAIgASgJEhEKCWNoYWxsZW5nZRgDIAEoCRIRCglzaWduYXR1cmUYBCABKAkSEwoLY2VydGlmaWNhdGUYBSABKAkSEAoIc2lnbmVkQXQYBiABKAkiPgoGU3RhdHVzEhAKCHByb3ZpZGVyGAEgASgJEg0KBXJlYWR5GAIgASgIEhMKC2NhcmRQcmVzZW50GAMgASgIIjsKDkhlYWx0aFJlc3BvbnNlEgoKAm9rGAEgASgIEgwKBG5hbWUYAiABKAkSDwoHdmVyc2lvbhgDIAEoCULDAQoOY29tLmxvY2FsaWQudjFCDVByb3RvY29sUHJvdG9QAVpZZ2l0aHViLmNvbS9ycWMtaWN1L2xvY2FsaWQtYWdlbnQvc2VydmljZXMvYWdlbnQvaW50ZXJuYWwvcHJvdG9jb2wvcGIvbG9jYWxpZC92MTtsb2NhbGlkdjGiAgNMWFiqAgpMb2NhbGlkLlYxygIKTG9jYWxpZFxWMeICFkxvY2FsaWRcVjFcR1BCTWV0YWRhdGHqAgtMb2NhbGlkOjpWMWIGcHJvdG8z");
+  fileDesc("Chlsb2NhbGlkL3YxL3Byb3RvY29sLnByb3RvEgpsb2NhbGlkLnYxIlsKFFNpZ25DaGFsbGVuZ2VSZXF1ZXN0EhEKCWNoYWxsZW5nZRgBIAEoCRIPCgdiYWNrZW5kGAIgASgJEg8KB3B1cnBvc2UYAyABKAkSDgoGb3JpZ2luGAQgASgJIokBChVTaWduQ2hhbGxlbmdlUmVzcG9uc2USEAoIcHJvdmlkZXIYASABKAkSEQoJYWxnb3JpdGhtGAIgASgJEhEKCWNoYWxsZW5nZRgDIAEoCRIRCglzaWduYXR1cmUYBCABKAkSEwoLY2VydGlmaWNhdGUYBSABKAkSEAoIc2lnbmVkQXQYBiABKAkiTwoGU3RhdHVzEhAKCHByb3ZpZGVyGAEgASgJEg0KBXJlYWR5GAIgASgIEhMKC2NhcmRQcmVzZW50GAMgASgIEg8KB21lc3NhZ2UYBCABKAkiOwoOSGVhbHRoUmVzcG9uc2USCgoCb2sYASABKAgSDAoEbmFtZRgCIAEoCRIPCgd2ZXJzaW9uGAMgASgJQsMBCg5jb20ubG9jYWxpZC52MUINUHJvdG9jb2xQcm90b1ABWllnaXRodWIuY29tL3JxYy1pY3UvbG9jYWxpZC1hZ2VudC9zZXJ2aWNlcy9hZ2VudC9pbnRlcm5hbC9wcm90b2NvbC9wYi9sb2NhbGlkL3YxO2xvY2FsaWR2MaICA0xYWKoCCkxvY2FsaWQuVjHKAgpMb2NhbGlkXFYx4gIWTG9jYWxpZFxWMVxHUEJNZXRhZGF0YeoCC0xvY2FsaWQ6OlYxYgZwcm90bzM");
 
 /**
  * SignChallengeRequest is the body for POST /sign-challenge.
@@ -110,6 +110,13 @@ export type Status = Message<"localid.v1.Status"> & {
    * @generated from field: bool cardPresent = 3;
    */
   cardPresent: boolean;
+
+  /**
+   * Human-readable detail when ready/cardPresent is false (e.g. missing PKCS#11 module).
+   *
+   * @generated from field: string message = 4;
+   */
+  message: string;
 };
 
 /**

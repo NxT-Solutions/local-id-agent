@@ -27,6 +27,8 @@ message Status {
   string provider = 1;
   bool ready = 2;
   bool cardPresent = 3;
+  // Human-readable detail when ready/cardPresent is false (e.g. missing PKCS#11 module).
+  string message = 4;
 }
 
 // HealthResponse is returned by GET /health.

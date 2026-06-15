@@ -127,6 +127,9 @@ components:
           type: boolean
         cardPresent:
           type: boolean
+        message:
+          type: string
+          description: Human-readable detail when the provider is not ready
 
     SignChallengeRequest:
       type: object
