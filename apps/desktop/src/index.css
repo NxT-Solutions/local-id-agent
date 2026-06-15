@@ -75,7 +75,33 @@
     @apply border-border outline-ring/50;
   }
 
+  html,
+  body,
+  #root {
+    @apply h-full overflow-hidden;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
+  }
+}
+
+@layer utilities {
+  .surface-muted {
+    @apply bg-muted/30;
+  }
+
+  .surface-elevated {
+    @apply border bg-card shadow-sm;
+  }
+
+  @keyframes spin-reverse {
+    to {
+      transform: rotate(-360deg);
+    }
+  }
+
+  .animate-spin-reverse {
+    animation: spin-reverse 1s linear infinite;
   }
 }
