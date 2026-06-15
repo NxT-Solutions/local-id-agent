@@ -62,7 +62,7 @@ func (s *Server) handleSignChallenge(w http.ResponseWriter, r *http.Request) {
 	resp, err := s.provider.SignChallenge(r.Context(), req)
 	if err != nil {
 		s.logger.Error("sign challenge failed", "error", err)
-		protocol.WriteBadRequest(w, err.Error())
+		protocol.WriteBadRequest(w, publicSignError(err))
 		return
 	}
 

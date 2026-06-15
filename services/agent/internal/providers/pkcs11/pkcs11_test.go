@@ -2,6 +2,8 @@ package pkcs11
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -170,7 +172,7 @@ func TestStatus(t *testing.T) {
 		require.NoError(t, err)
 		assert.False(t, status.Ready)
 		assert.False(t, status.CardPresent)
-		assert.Equal(t, "missing", status.Message)
+		assert.Equal(t, "PKCS#11 module is not available", status.Message)
 	})
 
 	t.Run("returns unavailable when slot scan fails", func(t *testing.T) {
@@ -187,7 +189,7 @@ func TestStatus(t *testing.T) {
 		require.NoError(t, err)
 		assert.False(t, status.Ready)
 		assert.False(t, status.CardPresent)
-		assert.Contains(t, status.Message, "slot failure")
+		assert.Equal(t, "could not scan for smartcard token", status.Message)
 	})
 
 	t.Run("returns unavailable when module open fails", func(t *testing.T) {
@@ -202,7 +204,7 @@ func TestStatus(t *testing.T) {
 		require.NoError(t, err)
 		assert.False(t, status.Ready)
 		assert.False(t, status.CardPresent)
-		assert.Contains(t, status.Message, "factory failed")
+		assert.Equal(t, "PKCS#11 module could not be opened", status.Message)
 	})
 
 	t.Run("ready when token initialized without present flag", func(t *testing.T) {
@@ -243,6 +245,26 @@ func TestStatus(t *testing.T) {
 		assert.True(t, status.Ready)
 		assert.True(t, status.CardPresent)
 		assert.Empty(t, status.Message)
+	})
+
+	t.Run("not ready when no token detected", func(t *testing.T) {
+		p := &Provider{
+			cfg:         config.PKCS11Config{},
+			resolvePath: func(string) (string, error) { return "/module.so", nil },
+			moduleFactory: func(string) (module, error) {
+				return &fakeModule{
+					getSlotListFn: func(bool) ([]uint, error) { return []uint{1}, nil },
+					getTokenInfoFn: func(uint) (p11.TokenInfo, error) {
+						return p11.TokenInfo{Flags: 0}, nil
+					},
+				}, nil
+			},
+		}
+		status, err := p.Status(context.Background())
+		require.NoError(t, err)
+		assert.False(t, status.Ready)
+		assert.False(t, status.CardPresent)
+		assert.Equal(t, "no smartcard token detected; insert your eID card and retry", status.Message)
 	})
 }
 
@@ -841,6 +863,102 @@ func TestHelpers(t *testing.T) {
 		_, _, err = p.openModule("/module.so")
 		require.Error(t, err)
 	})
+
+	t.Run("signing algorithm for certificate types", func(t *testing.T) {
+		rsaCert, err := x509.ParseCertificate(mustCreateCertificateDER(t))
+		require.NoError(t, err)
+		algorithm, err := signingAlgorithmForCert(rsaCert)
+		require.NoError(t, err)
+		assert.Equal(t, "RS256", algorithm)
+
+		p256Cert, err := x509.ParseCertificate(mustCreateECDSACertificateDER(t, elliptic.P256()))
+		require.NoError(t, err)
+		algorithm, err = signingAlgorithmForCert(p256Cert)
+		require.NoError(t, err)
+		assert.Equal(t, "ES256", algorithm)
+
+		p384Cert, err := x509.ParseCertificate(mustCreateECDSACertificateDER(t, elliptic.P384()))
+		require.NoError(t, err)
+		algorithm, err = signingAlgorithmForCert(p384Cert)
+		require.NoError(t, err)
+		assert.Equal(t, "ES384", algorithm)
+
+		p521Cert, err := x509.ParseCertificate(mustCreateECDSACertificateDER(t, elliptic.P521()))
+		require.NoError(t, err)
+		_, err = signingAlgorithmForCert(p521Cert)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "unsupported ECDSA curve")
+
+		unsupportedCert := &x509.Certificate{PublicKey: struct{}{}}
+		_, err = signingAlgorithmForCert(unsupportedCert)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "unsupported certificate public key type")
+	})
+
+	t.Run("sign payload supports ECDSA algorithms", func(t *testing.T) {
+		p := &Provider{}
+		var mechanism uint
+		sig, err := p.signPayload(&fakeModule{
+			signInitFn: func(_ p11.SessionHandle, mech []*p11.Mechanism, _ p11.ObjectHandle) error {
+				mechanism = mech[0].Mechanism
+				return nil
+			},
+			signFn: func(p11.SessionHandle, []byte) ([]byte, error) {
+				return []byte("ec-signature"), nil
+			},
+		}, 1, 1, "ES256", []byte("payload"))
+		require.NoError(t, err)
+		assert.Equal(t, []byte("ec-signature"), sig)
+		assert.Equal(t, uint(p11.CKM_ECDSA_SHA256), mechanism)
+
+		sig, err = p.signPayload(&fakeModule{
+			signInitFn: func(_ p11.SessionHandle, mech []*p11.Mechanism, _ p11.ObjectHandle) error {
+				mechanism = mech[0].Mechanism
+				return nil
+			},
+			signFn: func(p11.SessionHandle, []byte) ([]byte, error) {
+				return []byte("ec384-signature"), nil
+			},
+		}, 1, 1, "ES384", []byte("payload"))
+		require.NoError(t, err)
+		assert.Equal(t, []byte("ec384-signature"), sig)
+		assert.Equal(t, uint(p11.CKM_ECDSA_SHA384), mechanism)
+
+		_, err = p.signPayload(&fakeModule{}, 1, 1, "HS256", []byte("payload"))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "unsupported signing algorithm")
+	})
+
+	t.Run("sign payload digest info RSA init error", func(t *testing.T) {
+		p := &Provider{}
+		_, err := p.signPayloadDigestInfoRSA(&fakeModule{
+			signInitFn: func(p11.SessionHandle, []*p11.Mechanism, p11.ObjectHandle) error {
+				return errors.New("init failed")
+			},
+		}, 1, 1, []byte("payload"))
+		require.Error(t, err)
+	})
+
+	t.Run("load signing material unsupported curve", func(t *testing.T) {
+		p := &Provider{}
+		call := 0
+		_, _, _, err := p.loadSigningMaterial(&fakeModule{
+			findObjectsFn: func(p11.SessionHandle, int) ([]p11.ObjectHandle, bool, error) {
+				call++
+				if call == 1 {
+					return []p11.ObjectHandle{1}, false, nil
+				}
+				return []p11.ObjectHandle{2}, false, nil
+			},
+			getAttributesFn: func(p11.SessionHandle, p11.ObjectHandle, []*p11.Attribute) ([]*p11.Attribute, error) {
+				return []*p11.Attribute{
+					{Type: p11.CKA_VALUE, Value: mustCreateECDSACertificateDER(t, elliptic.P521())},
+				}, nil
+			},
+		}, 1)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "unsupported ECDSA curve")
+	})
 }
 
 func TestCloseModuleAndFactory(t *testing.T) {
@@ -904,6 +1022,24 @@ func mustCreateCertificateDER(t *testing.T) []byte {
 	template := x509.Certificate{
 		SerialNumber: big.NewInt(1),
 		Subject:      pkix.Name{CommonName: "LocalID Test"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
+	require.NoError(t, err)
+	return certDER
+}
+
+func mustCreateECDSACertificateDER(t *testing.T, curve elliptic.Curve) []byte {
+	t.Helper()
+	privateKey, err := ecdsa.GenerateKey(curve, rand.Reader)
+	require.NoError(t, err)
+
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "LocalID ECDSA Test"},
 		NotBefore:    time.Now().Add(-time.Hour),
 		NotAfter:     time.Now().Add(time.Hour),
 		KeyUsage:     x509.KeyUsageDigitalSignature,

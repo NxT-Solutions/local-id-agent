@@ -90,20 +90,20 @@ func (p *Provider) Status(ctx context.Context) (*protocol.Status, error) {
 
 	modulePath, err := p.resolvePath(p.cfg.ModulePath)
 	if err != nil {
-		status.Message = err.Error()
+		status.Message = "PKCS#11 module is not available"
 		return status, nil
 	}
 
 	module, initialized, err := p.openModule(modulePath)
 	if err != nil {
-		status.Message = fmt.Sprintf("open PKCS#11 module %q: %v", modulePath, err)
+		status.Message = "PKCS#11 module could not be opened"
 		return status, nil
 	}
 	defer closeModule(module, initialized)
 
 	_, cardPresent, err := p.selectTokenSlot(module)
 	if err != nil {
-		status.Message = fmt.Sprintf("scan token slots: %v", err)
+		status.Message = "could not scan for smartcard token"
 		return status, nil
 	}
 

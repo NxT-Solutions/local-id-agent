@@ -20,6 +20,13 @@ const shutdownTimeout = 10 * time.Second
 
 const maxBodySize = 64 << 10 // 64 KB
 
+const (
+	readHeaderTimeout = 5 * time.Second
+	readTimeout       = 30 * time.Second
+	writeTimeout      = 120 * time.Second
+	idleTimeout       = 60 * time.Second
+)
+
 var shutdownServer = func(server *http.Server, ctx context.Context) error {
 	return server.Shutdown(ctx)
 }
@@ -56,8 +63,12 @@ func (s *Server) Handler() http.Handler {
 	s.registerRoutes(r)
 
 	s.httpServer = &http.Server{
-		Addr:    s.cfg.Addr(),
-		Handler: r,
+		Addr:              s.cfg.Addr(),
+		Handler:           r,
+		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTimeout,
+		IdleTimeout:       idleTimeout,
 	}
 
 	return r
