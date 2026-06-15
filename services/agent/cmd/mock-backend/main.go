@@ -30,7 +30,12 @@ const (
 	challengeBytes  = 32
 )
 
-var allowedOrigins = []string{"http://localhost:5173", "http://localhost:5174"}
+var allowedOrigins = []string{
+	"http://localhost:5173",
+	"http://localhost:5174",
+	"http://localhost:1420",
+	"tauri://localhost",
+}
 
 var (
 	randRead       = rand.Read
