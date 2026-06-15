@@ -3,10 +3,19 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/sha512"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -220,25 +229,6 @@ func TestHandleVerify(t *testing.T) {
 	})
 }
 
-func TestParseCertificate(t *testing.T) {
-	_, err := parseCertificate("")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "certificate is required")
-
-	_, err = parseCertificate("invalid")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "valid base64")
-
-	_, err = parseCertificate(base64.StdEncoding.EncodeToString([]byte("not cert")))
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid certificate")
-
-	validReq := validVerifyRequest(t, "YWJj")
-	cert, err := parseCertificate(validReq.Certificate)
-	require.NoError(t, err)
-	assert.NotNil(t, cert.PublicKey)
-}
-
 func TestWriteHelpers(t *testing.T) {
 	rec := httptest.NewRecorder()
 	writeJSON(rec, http.StatusCreated, map[string]string{"ok": "yes"})
@@ -295,4 +285,169 @@ func TestRunAndMain(t *testing.T) {
 		main()
 		assert.True(t, fatalCalled)
 	})
+}
+
+func TestParseCertificate(t *testing.T) {
+	_, err := parseCertificate("")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "certificate is required")
+
+	_, err = parseCertificate("invalid")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "valid base64")
+
+	_, err = parseCertificate(base64.StdEncoding.EncodeToString([]byte("not cert")))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid certificate")
+
+	validReq := validVerifyRequest(t, "YWJj")
+	cert, err := parseCertificate(validReq.Certificate)
+	require.NoError(t, err)
+	assert.NotNil(t, cert.PublicKey)
+}
+
+func TestVerifyProofSignature(t *testing.T) {
+	payload := []byte("canonical-payload")
+
+	t.Run("RS256 success", func(t *testing.T) {
+		cert, privateKey := mustCreateRSACert(t)
+		hash := sha256.Sum256(payload)
+		signature, err := rsa.SignPKCS1v15(rand.Reader, privateKey, crypto.SHA256, hash[:])
+		require.NoError(t, err)
+		require.NoError(t, verifyProofSignature("RS256", cert, payload, signature))
+	})
+
+	t.Run("RS256 wrong public key type", func(t *testing.T) {
+		cert, _ := mustCreateECDSACert(t, elliptic.P256())
+		err := verifyProofSignature("RS256", cert, payload, []byte("sig"))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "not RSA")
+	})
+
+	t.Run("RS256 invalid signature", func(t *testing.T) {
+		cert, _ := mustCreateRSACert(t)
+		err := verifyProofSignature("RS256", cert, payload, []byte("invalid-signature"))
+		require.Error(t, err)
+	})
+
+	t.Run("ES256 success", func(t *testing.T) {
+		cert, privateKey := mustCreateECDSACert(t, elliptic.P256())
+		hash := sha256.Sum256(payload)
+		r, s, err := ecdsa.Sign(rand.Reader, privateKey, hash[:])
+		require.NoError(t, err)
+		size := (privateKey.Curve.Params().BitSize + 7) / 8
+		signature := append(padBigInt(r, size), padBigInt(s, size)...)
+		require.NoError(t, verifyProofSignature("ES256", cert, payload, signature))
+	})
+
+	t.Run("ES256 invalid signature", func(t *testing.T) {
+		cert, _ := mustCreateECDSACert(t, elliptic.P256())
+		err := verifyProofSignature("ES256", cert, payload, []byte("bad-signature"))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid ES256 signature")
+	})
+
+	t.Run("ES256 wrong public key type", func(t *testing.T) {
+		cert, privateKey := mustCreateRSACert(t)
+		hash := sha256.Sum256(payload)
+		signature, err := rsa.SignPKCS1v15(rand.Reader, privateKey, crypto.SHA256, hash[:])
+		require.NoError(t, err)
+		err = verifyProofSignature("ES256", cert, payload, signature)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "not ECDSA")
+	})
+
+	t.Run("ES384 success", func(t *testing.T) {
+		cert, privateKey := mustCreateECDSACert(t, elliptic.P384())
+		hash := sha512.Sum384(payload)
+		r, s, err := ecdsa.Sign(rand.Reader, privateKey, hash[:])
+		require.NoError(t, err)
+		size := (privateKey.Curve.Params().BitSize + 7) / 8
+		signature := append(padBigInt(r, size), padBigInt(s, size)...)
+		require.NoError(t, verifyProofSignature("ES384", cert, payload, signature))
+	})
+
+	t.Run("ES384 wrong public key type", func(t *testing.T) {
+		cert, privateKey := mustCreateRSACert(t)
+		hash := sha512.Sum384(payload)
+		signature, err := rsa.SignPKCS1v15(rand.Reader, privateKey, crypto.SHA384, hash[:])
+		require.NoError(t, err)
+		err = verifyProofSignature("ES384", cert, payload, signature)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "not ECDSA")
+	})
+
+	t.Run("ES384 invalid signature", func(t *testing.T) {
+		cert, _ := mustCreateECDSACert(t, elliptic.P384())
+		err := verifyProofSignature("ES384", cert, payload, []byte("bad-signature"))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid ES384 signature")
+	})
+
+	t.Run("unsupported algorithm", func(t *testing.T) {
+		cert, _ := mustCreateRSACert(t)
+		err := verifyProofSignature("HS256", cert, payload, []byte("sig"))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "unsupported algorithm")
+	})
+}
+
+func TestVerifyRawECDSA(t *testing.T) {
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	hash := sha256.Sum256([]byte("payload"))
+	r, s, err := ecdsa.Sign(rand.Reader, privateKey, hash[:])
+	require.NoError(t, err)
+
+	size := (privateKey.Curve.Params().BitSize + 7) / 8
+	validSignature := append(padBigInt(r, size), padBigInt(s, size)...)
+	assert.True(t, verifyRawECDSA(&privateKey.PublicKey, hash[:], validSignature))
+	assert.False(t, verifyRawECDSA(&privateKey.PublicKey, hash[:], []byte("short")))
+}
+
+func mustCreateRSACert(t *testing.T) (*x509.Certificate, *rsa.PrivateKey) {
+	t.Helper()
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "RSA Test"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+	}
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
+	require.NoError(t, err)
+	cert, err := x509.ParseCertificate(certDER)
+	require.NoError(t, err)
+	return cert, privateKey
+}
+
+func mustCreateECDSACert(t *testing.T, curve elliptic.Curve) (*x509.Certificate, *ecdsa.PrivateKey) {
+	t.Helper()
+	privateKey, err := ecdsa.GenerateKey(curve, rand.Reader)
+	require.NoError(t, err)
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "ECDSA Test"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+	}
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
+	require.NoError(t, err)
+	cert, err := x509.ParseCertificate(certDER)
+	require.NoError(t, err)
+	return cert, privateKey
+}
+
+func padBigInt(value *big.Int, size int) []byte {
+	bytes := value.Bytes()
+	if len(bytes) >= size {
+		return bytes
+	}
+	padded := make([]byte, size)
+	copy(padded[size-len(bytes):], bytes)
+	return padded
 }

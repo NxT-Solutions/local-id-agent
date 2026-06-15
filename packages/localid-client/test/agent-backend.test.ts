@@ -94,8 +94,18 @@ describe("agent and backend clients", () => {
     await expect(fetchStatus()).rejects.toThrow("Request failed (500)");
   });
 
-  it("throws fallback error for json body without error field", async () => {
+  it("throws json message field when error is absent", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ message: "bad" }, 401));
+    await expect(signChallenge({
+      challenge: "YWJj",
+      backend: "http://localhost:8000",
+      origin: "http://localhost:5173",
+      purpose: "login",
+    })).rejects.toThrow("bad");
+  });
+
+  it("throws fallback error for json body without error or message field", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ code: "unauthorized" }, 401));
     await expect(signChallenge({
       challenge: "YWJj",
       backend: "http://localhost:8000",
@@ -194,8 +204,15 @@ describe("agent and backend clients", () => {
     ).rejects.toThrow("Request failed (502)");
   });
 
-  it("throws backend fallback when json has no error field", async () => {
+  it("throws backend json message when error is absent", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ message: "no error field" }, 418));
+    await expect(
+      fetchChallenge("http://backend.test"),
+    ).rejects.toThrow("no error field");
+  });
+
+  it("throws backend fallback when json has no error or message field", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ detail: "missing fields" }, 418));
     await expect(
       fetchChallenge("http://backend.test"),
     ).rejects.toThrow("Request failed (418)");
