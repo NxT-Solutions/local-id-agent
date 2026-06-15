@@ -13,6 +13,7 @@ use tauri_plugin_shell::ShellExt;
 const SIDECAR_NAME: &str = "localid-agent";
 const AGENT_BASE_URL: &str = "http://127.0.0.1:17443";
 const AGENT_FETCH_TIMEOUT_SECS: u64 = 4;
+const AGENT_FETCH_SIGN_TIMEOUT_SECS: u64 = 120;
 const REQUIRED_ALLOWED_ORIGINS: [&str; 2] = ["tauri://localhost", "http://localhost:1420"];
 const REQUIRED_ALLOWED_BACKENDS: [&str; 1] = ["http://localhost:8000"];
 const FALLBACK_PROVIDER: &str = "mock";
@@ -285,6 +286,14 @@ fn get_diagnostics(
     })
 }
 
+fn agent_fetch_timeout(method: &str, path: &str) -> std::time::Duration {
+    if method.eq_ignore_ascii_case("POST") && path.starts_with("/sign-challenge") {
+        std::time::Duration::from_secs(AGENT_FETCH_SIGN_TIMEOUT_SECS)
+    } else {
+        std::time::Duration::from_secs(AGENT_FETCH_TIMEOUT_SECS)
+    }
+}
+
 #[tauri::command]
 fn agent_fetch(
     method: String,
@@ -297,9 +306,8 @@ fn agent_fetch(
     }
 
     let url = format!("{AGENT_BASE_URL}{path}");
-    let agent = ureq::AgentBuilder::new()
-        .timeout(std::time::Duration::from_secs(AGENT_FETCH_TIMEOUT_SECS))
-        .build();
+    let timeout = agent_fetch_timeout(&method, &path);
+    let agent = ureq::AgentBuilder::new().timeout(timeout).build();
 
     let upper_method = method.to_ascii_uppercase();
     let response = match upper_method.as_str() {
