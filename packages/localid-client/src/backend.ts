@@ -5,8 +5,10 @@ async function parseJSON<T>(response: Response): Promise<T> {
   if (!response.ok) {
     let message = `Request failed (${response.status})`;
     try {
-      const body = (await response.json()) as { error?: string };
-      if (body.error) {
+      const body = (await response.json()) as { error?: string; message?: string };
+      if (body.message) {
+        message = body.message;
+      } else if (body.error) {
         message = body.error;
       }
     } catch {
