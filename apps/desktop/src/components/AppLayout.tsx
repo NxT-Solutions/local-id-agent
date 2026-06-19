@@ -1,15 +1,21 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Activity,
   BookOpen,
   LayoutDashboard,
+  Lock,
+  LockKeyhole,
   PlayCircle,
   Settings,
   Shield,
 } from "lucide-react";
+import { UnlockDialog } from "@/components/admin/UnlockDialog";
 import { SystemStatusBar } from "@/components/layout/SystemStatusBar";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useAdminLock } from "@/context/AdminLockContext";
 import { cn } from "@/lib/utils";
 
 function navLinkClass(isActive: boolean) {
@@ -22,20 +28,31 @@ function navLinkClass(isActive: boolean) {
   );
 }
 
-const navItems: Array<{
-  to: string;
-  label: string;
-  icon: typeof LayoutDashboard;
-  end?: boolean;
-}> = [
+const userNavItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
+  { to: "/about", label: "Diagnostics", icon: Activity },
+] as const;
+
+const adminNavItems = [
   { to: "/setup", label: "Setup", icon: BookOpen },
   { to: "/settings", label: "Settings", icon: Settings },
-  { to: "/about", label: "Diagnostics", icon: Activity },
   { to: "/demo", label: "Demo", icon: PlayCircle },
-];
+] as const;
 
 export function AppLayout() {
+  const {
+    unlocked,
+    lock,
+    unlockDialogOpen,
+    setUnlockDialogOpen,
+    requestUnlock,
+  } = useAdminLock();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const navItems = unlocked
+    ? [...userNavItems, ...adminNavItems]
+    : [...userNavItems];
+
   return (
     <TooltipProvider delayDuration={400}>
       <div className="flex h-screen overflow-hidden bg-background">
@@ -61,7 +78,7 @@ export function AppLayout() {
               <NavLink
                 key={item.to}
                 to={item.to}
-                end={item.end}
+                end={"end" in item ? item.end : undefined}
                 aria-label={item.label}
                 title={item.label}
                 className={({ isActive }) => navLinkClass(isActive)}
@@ -72,9 +89,38 @@ export function AppLayout() {
             ))}
           </nav>
 
-          <div className="shrink-0 border-t bg-card p-2 md:px-4 md:py-3">
+          <div className="shrink-0 space-y-2 border-t bg-card p-2 md:px-4 md:py-3">
+            <div className="hidden flex-col gap-2 md:flex">
+              {unlocked ? (
+                <>
+                  <Badge variant="secondary" className="w-fit gap-1">
+                    <Shield className="h-3 w-3" />
+                    Admin
+                  </Badge>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-start"
+                    onClick={() => void lock()}
+                  >
+                    <Lock className="h-4 w-4" />
+                    Lock admin
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start"
+                  onClick={requestUnlock}
+                >
+                  <LockKeyhole className="h-4 w-4" />
+                  Unlock admin
+                </Button>
+              )}
+            </div>
             <ThemeSwitcher />
-            <p className="mt-2 hidden text-[0.6875rem] leading-relaxed text-muted-foreground md:block">
+            <p className="hidden text-[0.6875rem] leading-relaxed text-muted-foreground md:block">
               Signs challenges locally. Does not issue sessions or tokens.
             </p>
           </div>
@@ -91,6 +137,23 @@ export function AppLayout() {
           </main>
         </div>
       </div>
+
+      <UnlockDialog
+        open={unlockDialogOpen}
+        onOpenChange={setUnlockDialogOpen}
+        onUnlocked={() => {
+          const from =
+            typeof location.state === "object" &&
+            location.state !== null &&
+            "from" in location.state &&
+            typeof location.state.from === "string"
+              ? location.state.from
+              : null;
+          if (from) {
+            navigate(from, { replace: true, state: null });
+          }
+        }}
+      />
     </TooltipProvider>
   );
 }

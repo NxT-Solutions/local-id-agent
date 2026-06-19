@@ -32,11 +32,17 @@ import { useActionFeedback } from "@/hooks/useActionFeedback";
 import { useSpinWhile } from "@/hooks/useSpinWhile";
 import { openExternalUrl } from "@/lib/open-external";
 import { DOC_RESOURCES, repoDocUrl } from "@/lib/repo-docs";
-import { copyDiagnostics, getDiagnostics, type DiagnosticsInfo } from "@/lib/tauri";
+import { copyDiagnostics, getAdminDiagnostics, getDiagnostics } from "@/lib/tauri";
+import { useAdminLock } from "@/context/AdminLockContext";
 import { cn } from "@/lib/utils";
 
+type DiagnosticsView = Awaited<ReturnType<typeof getDiagnostics>> & {
+  configPath?: string;
+};
+
 export function AboutPage() {
-  const [info, setInfo] = useState<DiagnosticsInfo | null>(null);
+  const { unlocked } = useAdminLock();
+  const [info, setInfo] = useState<DiagnosticsView | null>(null);
   const [healthOk, setHealthOk] = useState<boolean | null>(null);
   const [providerReady, setProviderReady] = useState<boolean | null>(null);
   const [copied, setCopied] = useState(false);
@@ -57,7 +63,9 @@ export function AboutPage() {
     setIsRefreshing(true);
 
     try {
-      const diagnostics = await getDiagnostics();
+      const diagnostics = unlocked
+        ? await getAdminDiagnostics()
+        : await getDiagnostics();
       setInfo(diagnostics);
 
       const [health, status] = await Promise.all([
@@ -85,7 +93,7 @@ export function AboutPage() {
       setIsRefreshing(false);
       setIsInitialLoad(false);
     }
-  }, []);
+  }, [unlocked]);
 
   function handleManualRefresh() {
     void refresh().then((ok) => {
@@ -103,7 +111,7 @@ export function AboutPage() {
 
   async function handleCopy() {
     try {
-      const payload = await copyDiagnostics();
+      const payload = await copyDiagnostics(unlocked);
       await navigator.clipboard.writeText(payload);
       setCopied(true);
       copyFeedback.showSuccess("Copied");
@@ -125,7 +133,11 @@ export function AboutPage() {
     <div className="space-y-8">
       <PageHeader
         title="Diagnostics"
-        description="Version details, runtime health, and troubleshooting data for support requests."
+        description={
+          unlocked
+            ? "Version details, runtime health, and troubleshooting data for support requests."
+            : "Limited runtime health details. Unlock admin for config path and full diagnostics bundle."
+        }
         actions={
           <>
             <ActionFeedbackAnchor
@@ -147,9 +159,13 @@ export function AboutPage() {
               feedback={copyFeedback.feedback}
               onOpenChange={copyFeedback.onOpenChange}
             >
-              <Button variant="outline" size="sm" onClick={() => void handleCopy()}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void handleCopy()}
+              >
                 <Copy className="h-4 w-4" />
-                {copied ? "Copied" : "Copy all diagnostics"}
+                {copied ? "Copied" : unlocked ? "Copy all diagnostics" : "Copy diagnostics"}
               </Button>
             </ActionFeedbackAnchor>
           </>
@@ -326,8 +342,13 @@ export function AboutPage() {
               ]}
             />
           )}
-          {info?.configPath && (
+          {info?.configPath && unlocked && (
             <CopyField label="Config path" value={info.configPath} />
+          )}
+          {!unlocked && (
+            <p className="text-sm text-muted-foreground">
+              Config path and full diagnostics export require admin unlock.
+            </p>
           )}
         </CardContent>
       </Card>

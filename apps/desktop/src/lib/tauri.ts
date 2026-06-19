@@ -3,10 +3,26 @@ import { fetchHealth, fetchStatus } from "@rqc-icu/localid-client";
 
 export interface DiagnosticsInfo {
   appVersion: string;
-  configPath: string;
   agentUrl: string;
   platform: string;
   sidecarRunning: boolean;
+}
+
+export interface AdminDiagnosticsInfo extends DiagnosticsInfo {
+  configPath: string;
+}
+
+export interface AdminLockStatus {
+  configured: boolean;
+  unlocked: boolean;
+  expiresAt?: number;
+  setupRequired: boolean;
+  sessionToken?: string;
+}
+
+export interface UnlockResult {
+  sessionToken: string;
+  expiresAt: number;
 }
 
 export async function getConfigPath(): Promise<string> {
@@ -29,8 +45,37 @@ export async function getDiagnostics(): Promise<DiagnosticsInfo> {
   return invoke<DiagnosticsInfo>("get_diagnostics");
 }
 
-export async function copyDiagnostics(): Promise<string> {
-  const diagnostics = await getDiagnostics();
+export async function getAdminDiagnostics(): Promise<AdminDiagnosticsInfo> {
+  return invoke<AdminDiagnosticsInfo>("get_admin_diagnostics");
+}
+
+export async function getAdminLockStatus(): Promise<AdminLockStatus> {
+  return invoke<AdminLockStatus>("get_admin_lock_status");
+}
+
+export async function setupAdminPasscode(passcode: string): Promise<UnlockResult> {
+  return invoke<UnlockResult>("setup_admin_passcode", { passcode });
+}
+
+export async function unlockAdmin(passcode: string): Promise<UnlockResult> {
+  return invoke<UnlockResult>("unlock_admin", { passcode });
+}
+
+export async function lockAdmin(): Promise<void> {
+  return invoke("lock_admin");
+}
+
+export async function changeAdminPasscode(
+  currentPasscode: string,
+  newPasscode: string,
+): Promise<void> {
+  return invoke("change_admin_passcode", { currentPasscode, newPasscode });
+}
+
+export async function copyDiagnostics(includeConfigPath: boolean): Promise<string> {
+  const diagnostics = includeConfigPath
+    ? await getAdminDiagnostics()
+    : await getDiagnostics();
   const health = await fetchHealth().catch(() => ({ error: "unreachable" }));
   const status = await fetchStatus().catch(() => ({ error: "unreachable" }));
 

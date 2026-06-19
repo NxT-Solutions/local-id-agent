@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Save, Server, Shield, Sliders } from "lucide-react";
+import { LockKeyhole, Save, Server, Shield, Sliders } from "lucide-react";
 import { AlertBanner } from "@/components/layout/AlertBanner";
 import { CopyField } from "@/components/layout/CopyField";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -23,8 +23,10 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ActionFeedbackAnchor } from "@/components/ui/action-feedback";
+import { UnlockDialog } from "@/components/admin/UnlockDialog";
 import { useActionFeedback } from "@/hooks/useActionFeedback";
-import { getConfigPath, readConfig, restartAgent, writeConfig } from "@/lib/tauri";
+import { getConfigPath, readConfig, restartAgent, writeConfig, changeAdminPasscode } from "@/lib/tauri";
+import { useAdminLock } from "@/context/AdminLockContext";
 
 const PROVIDER_OPTIONS = [
   { value: "mock", label: "Mock (development)" },
@@ -136,16 +138,27 @@ function countLines(value: string): number {
 }
 
 export function SettingsPage() {
+  const { unlocked, lock } = useAdminLock();
+  const [unlockOpen, setUnlockOpen] = useState(false);
   const [configPath, setConfigPath] = useState("");
   const [rawConfig, setRawConfig] = useState("");
   const [form, setForm] = useState<ConfigForm | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [currentPasscode, setCurrentPasscode] = useState("");
+  const [newPasscode, setNewPasscode] = useState("");
+  const [confirmPasscode, setConfirmPasscode] = useState("");
+  const [passcodeMessage, setPasscodeMessage] = useState<string | null>(null);
+  const [passcodeError, setPasscodeError] = useState<string | null>(null);
+  const [changingPasscode, setChangingPasscode] = useState(false);
   const headerSaveFeedback = useActionFeedback();
   const footerSaveFeedback = useActionFeedback();
 
   useEffect(() => {
+    if (!unlocked) {
+      return;
+    }
     void (async () => {
       try {
         const [path, contents] = await Promise.all([
@@ -159,7 +172,7 @@ export function SettingsPage() {
         setError(err instanceof Error ? err.message : "Failed to load config");
       }
     })();
-  }, []);
+  }, [unlocked]);
 
   const originCount = useMemo(
     () => (form ? countLines(form.allowedOrigins) : 0),
@@ -193,6 +206,65 @@ export function SettingsPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleChangePasscode(event: React.FormEvent) {
+    event.preventDefault();
+    setPasscodeMessage(null);
+    setPasscodeError(null);
+
+    if (newPasscode.length < 8) {
+      setPasscodeError("New passcode must be at least 8 characters.");
+      return;
+    }
+
+    if (newPasscode !== confirmPasscode) {
+      setPasscodeError("New passcodes do not match.");
+      return;
+    }
+
+    setChangingPasscode(true);
+    try {
+      await changeAdminPasscode(currentPasscode, newPasscode);
+      setCurrentPasscode("");
+      setNewPasscode("");
+      setConfirmPasscode("");
+      setPasscodeMessage("Admin passcode updated.");
+    } catch (err) {
+      setPasscodeError(err instanceof Error ? err.message : "Failed to change passcode");
+    } finally {
+      setChangingPasscode(false);
+    }
+  }
+
+  if (!unlocked) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Settings"
+          description="Agent configuration is protected by the admin passcode."
+        />
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <LockKeyhole className="h-4 w-4" />
+              Admin access required
+            </CardTitle>
+            <CardDescription>
+              Unlock admin to edit allowlists, provider settings, and server
+              configuration.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={() => setUnlockOpen(true)}>
+              <LockKeyhole className="h-4 w-4" />
+              Unlock to configure
+            </Button>
+          </CardContent>
+        </Card>
+        <UnlockDialog open={unlockOpen} onOpenChange={setUnlockOpen} />
+      </div>
+    );
   }
 
   if (!form) {
@@ -414,6 +486,70 @@ export function SettingsPage() {
           Changes take effect after the sidecar restarts (~1s).
         </p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <LockKeyhole className="h-4 w-4" />
+            Admin security
+          </CardTitle>
+          <CardDescription>
+            Manage the admin passcode and end the current admin session.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <form className="grid gap-4 md:grid-cols-3" onSubmit={(event) => void handleChangePasscode(event)}>
+            <div className="space-y-2">
+              <Label htmlFor="current-passcode">Current passcode</Label>
+              <Input
+                id="current-passcode"
+                type="password"
+                value={currentPasscode}
+                onChange={(event) => setCurrentPasscode(event.target.value)}
+                disabled={changingPasscode}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-passcode">New passcode</Label>
+              <Input
+                id="new-passcode"
+                type="password"
+                value={newPasscode}
+                onChange={(event) => setNewPasscode(event.target.value)}
+                disabled={changingPasscode}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-passcode">Confirm new passcode</Label>
+              <Input
+                id="confirm-passcode"
+                type="password"
+                value={confirmPasscode}
+                onChange={(event) => setConfirmPasscode(event.target.value)}
+                disabled={changingPasscode}
+              />
+            </div>
+            <div className="md:col-span-3 flex flex-wrap items-center gap-3">
+              <Button type="submit" variant="outline" disabled={changingPasscode}>
+                {changingPasscode ? "Updating…" : "Change passcode"}
+              </Button>
+              <Button type="button" variant="outline" onClick={() => void lock()}>
+                Lock now
+              </Button>
+            </div>
+          </form>
+          {passcodeMessage && (
+            <AlertBanner variant="success" title="Passcode updated">
+              {passcodeMessage}
+            </AlertBanner>
+          )}
+          {passcodeError && (
+            <AlertBanner variant="error" title="Passcode change failed">
+              {passcodeError}
+            </AlertBanner>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

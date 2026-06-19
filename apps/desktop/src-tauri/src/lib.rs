@@ -1,6 +1,9 @@
+mod admin_lock;
+
 use std::path::PathBuf;
 use std::sync::Mutex;
 
+use admin_lock::{require_admin, AdminLockState};
 use serde::Serialize;
 use tauri::{
     menu::{Menu, MenuItem},
@@ -31,6 +34,15 @@ struct AgentFetchResponse {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct DiagnosticsInfo {
+    app_version: String,
+    agent_url: String,
+    platform: String,
+    sidecar_running: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AdminDiagnosticsInfo {
     app_version: String,
     config_path: String,
     agent_url: String,
@@ -247,18 +259,25 @@ fn stop_agent(process: &AgentProcess) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn get_config_path(app: AppHandle) -> Result<String, String> {
+fn get_config_path(app: AppHandle, admin_lock: State<'_, AdminLockState>) -> Result<String, String> {
+    require_admin(admin_lock.inner(), &app)?;
     Ok(ensure_config(&app)?.to_string_lossy().to_string())
 }
 
 #[tauri::command]
-fn read_config(app: AppHandle) -> Result<String, String> {
+fn read_config(app: AppHandle, admin_lock: State<'_, AdminLockState>) -> Result<String, String> {
+    require_admin(admin_lock.inner(), &app)?;
     let path = ensure_config(&app)?;
     std::fs::read_to_string(path).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
-fn write_config(app: AppHandle, contents: String) -> Result<(), String> {
+fn write_config(
+    app: AppHandle,
+    admin_lock: State<'_, AdminLockState>,
+    contents: String,
+) -> Result<(), String> {
+    require_admin(admin_lock.inner(), &app)?;
     let _: serde_json::Value =
         serde_json::from_str(&contents).map_err(|error| error.to_string())?;
     let path = ensure_config(&app)?;
@@ -275,10 +294,27 @@ fn get_diagnostics(
     app: AppHandle,
     process: State<'_, AgentProcess>,
 ) -> Result<DiagnosticsInfo, String> {
-    let config_path = ensure_config(&app)?.to_string_lossy().to_string();
     let sidecar_running = process.0.lock().unwrap().is_some();
 
     Ok(DiagnosticsInfo {
+        app_version: app.package_info().version.to_string(),
+        agent_url: AGENT_BASE_URL.to_string(),
+        platform: std::env::consts::OS.to_string(),
+        sidecar_running,
+    })
+}
+
+#[tauri::command]
+fn get_admin_diagnostics(
+    app: AppHandle,
+    process: State<'_, AgentProcess>,
+    admin_lock: State<'_, AdminLockState>,
+) -> Result<AdminDiagnosticsInfo, String> {
+    require_admin(admin_lock.inner(), &app)?;
+    let config_path = ensure_config(&app)?.to_string_lossy().to_string();
+    let sidecar_running = process.0.lock().unwrap().is_some();
+
+    Ok(AdminDiagnosticsInfo {
         app_version: app.package_info().version.to_string(),
         config_path,
         agent_url: AGENT_BASE_URL.to_string(),
@@ -308,14 +344,42 @@ fn validate_agent_path(path: &str) -> Result<String, String> {
     }
 }
 
+fn requires_admin_for_agent_fetch(method: &str, path: &str) -> bool {
+    let path_only = path.split('?').next().unwrap_or(path);
+    method.eq_ignore_ascii_case("POST") && path_only.starts_with("/sign-challenge")
+}
+
+#[cfg(test)]
+mod agent_fetch_tests {
+    use super::requires_admin_for_agent_fetch;
+
+    #[test]
+    fn health_and_status_always_allowed() {
+        assert!(!requires_admin_for_agent_fetch("GET", "/health"));
+        assert!(!requires_admin_for_agent_fetch("GET", "/status"));
+    }
+
+    #[test]
+    fn sign_challenge_requires_admin() {
+        assert!(requires_admin_for_agent_fetch("POST", "/sign-challenge"));
+        assert!(!requires_admin_for_agent_fetch("GET", "/sign-challenge"));
+    }
+}
+
 #[tauri::command]
 fn agent_fetch(
+    app: AppHandle,
+    admin_lock: State<'_, AdminLockState>,
     method: String,
     path: String,
     body: Option<String>,
     origin: Option<String>,
 ) -> Result<AgentFetchResponse, String> {
     let path = validate_agent_path(&path)?;
+
+    if requires_admin_for_agent_fetch(&method, &path) {
+        require_admin(admin_lock.inner(), &app)?;
+    }
 
     let url = format!("{AGENT_BASE_URL}{path}");
     let timeout = agent_fetch_timeout(&method, &path);
@@ -395,6 +459,7 @@ pub fn run() {
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_shell::init())
         .manage(AgentProcess(Mutex::new(None)))
+        .manage(AdminLockState::new())
         .setup(|app| {
             setup_tray(app.handle())?;
 
@@ -416,7 +481,14 @@ pub fn run() {
             write_config,
             restart_agent,
             get_diagnostics,
+            get_admin_diagnostics,
             agent_fetch,
+            admin_lock::get_admin_lock_status,
+            admin_lock::setup_admin_passcode,
+            admin_lock::unlock_admin,
+            admin_lock::lock_admin,
+            admin_lock::change_admin_passcode,
+            admin_lock::verify_admin_session,
         ])
         .run(tauri::generate_context!())
         .expect("error while running LocalID Agent desktop");

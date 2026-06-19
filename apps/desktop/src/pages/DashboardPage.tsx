@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import {
   fetchHealth,
   fetchStatus,
@@ -37,6 +37,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { ActionFeedbackAnchor } from "@/components/ui/action-feedback";
+import { useAdminLock } from "@/context/AdminLockContext";
 import { useActionFeedback } from "@/hooks/useActionFeedback";
 import { useSpinWhile } from "@/hooks/useSpinWhile";
 import { cn } from "@/lib/utils";
@@ -65,6 +66,14 @@ function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
 }
 
 export function DashboardPage() {
+  const { unlocked } = useAdminLock();
+  const location = useLocation();
+  const adminRequired =
+    typeof location.state === "object" &&
+    location.state !== null &&
+    "adminRequired" in location.state &&
+    location.state.adminRequired === true;
+
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -254,16 +263,31 @@ export function DashboardPage() {
         }
       />
 
+      {adminRequired && !unlocked && (
+        <AlertBanner variant="warning" title="Admin access required">
+          Unlock admin from the sidebar to open settings, setup, or the auth demo.
+        </AlertBanner>
+      )}
+
       {error && (
         <AlertBanner variant="error" title="Agent is unreachable">
           <p>{error}</p>
           <p className="mt-2">
-            Check the provider in Settings, then click{" "}
-            <strong>Restart agent</strong>. If it still fails, reset config at{" "}
-            <code className="rounded bg-black/5 px-1 py-0.5 font-mono text-[0.75rem] dark:bg-white/10">
-              ~/Library/Application Support/icu.rqc.localid-agent/config.json
-            </code>
-            .
+            {unlocked ? (
+              <>
+                Check the provider in Settings, then click{" "}
+                <strong>Restart agent</strong>. If it still fails, reset config at{" "}
+                <code className="rounded bg-black/5 px-1 py-0.5 font-mono text-[0.75rem] dark:bg-white/10">
+                  ~/Library/Application Support/icu.rqc.localid-agent/config.json
+                </code>
+                .
+              </>
+            ) : (
+              <>
+                Click <strong>Restart agent</strong> to retry. If the problem
+                persists, contact your administrator.
+              </>
+            )}
           </p>
         </AlertBanner>
       )}
@@ -430,48 +454,50 @@ export function DashboardPage() {
         </CardContent>
       </Card>
 
-      <Card className="min-w-0 overflow-hidden">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Quick actions</CardTitle>
-          <CardDescription>Common next steps during integration</CardDescription>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {[
-            {
-              to: "/settings",
-              icon: Settings,
-              label: "Configure allowlists",
-              hint: "Origins & backends",
-            },
-            {
-              to: "/setup",
-              icon: BookOpen,
-              label: "Integration guide",
-              hint: "API contracts & flow",
-            },
-            {
-              to: "/demo",
-              icon: PlayCircle,
-              label: "Run auth demo",
-              hint: "End-to-end test",
-            },
-          ].map((action) => (
-            <Link
-              key={action.to}
-              to={action.to}
-              className="group flex min-w-0 cursor-pointer items-start gap-3 rounded-lg border bg-card p-3 transition-colors hover:border-primary/30 hover:bg-accent/50"
-            >
-              <action.icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground group-hover:text-primary" />
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium">{action.label}</p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {action.hint}
-                </p>
-              </div>
-            </Link>
-          ))}
-        </CardContent>
-      </Card>
+      {unlocked && (
+        <Card className="min-w-0 overflow-hidden">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Quick actions</CardTitle>
+            <CardDescription>Common next steps during integration</CardDescription>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              {
+                to: "/settings",
+                icon: Settings,
+                label: "Configure allowlists",
+                hint: "Origins & backends",
+              },
+              {
+                to: "/setup",
+                icon: BookOpen,
+                label: "Integration guide",
+                hint: "API contracts & flow",
+              },
+              {
+                to: "/demo",
+                icon: PlayCircle,
+                label: "Run auth demo",
+                hint: "End-to-end test",
+              },
+            ].map((action) => (
+              <Link
+                key={action.to}
+                to={action.to}
+                className="group flex min-w-0 cursor-pointer items-start gap-3 rounded-lg border bg-card p-3 transition-colors hover:border-primary/30 hover:bg-accent/50"
+              >
+                <action.icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground group-hover:text-primary" />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{action.label}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {action.hint}
+                  </p>
+                </div>
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
