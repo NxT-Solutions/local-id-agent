@@ -32,6 +32,12 @@
     },
     "shell:allow-kill",
     "shell:allow-spawn",
+    {
+      "identifier": "shell:allow-open",
+      "allow": [
+        { "url": "https://github.com/NxT-Solutions/local-id-agent/**" }
+      ]
+    },
     "http:allow-fetch",
     {
       "identifier": "http:default",

@@ -30,8 +30,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ActionFeedbackAnchor } from "@/components/ui/action-feedback";
 import { useActionFeedback } from "@/hooks/useActionFeedback";
 import { useSpinWhile } from "@/hooks/useSpinWhile";
-import { cn } from "@/lib/utils";
+import { openExternalUrl } from "@/lib/open-external";
+import { DOC_RESOURCES, repoDocUrl } from "@/lib/repo-docs";
 import { copyDiagnostics, getDiagnostics, type DiagnosticsInfo } from "@/lib/tauri";
+import { cn } from "@/lib/utils";
 
 export function AboutPage() {
   const [info, setInfo] = useState<DiagnosticsInfo | null>(null);
@@ -338,23 +340,28 @@ export function AboutPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-2 sm:grid-cols-2">
-          {[
-            { label: "Architecture", path: "docs/architecture.md" },
-            { label: "Agent config", path: "docs/agent-config.md" },
-            { label: "Desktop guide", path: "docs/desktop.md" },
-            { label: "OpenAPI specs", path: "openapi/" },
-          ].map((resource) => (
-            <div
-              key={resource.path}
-              className="flex min-w-0 flex-col gap-1 rounded-lg border bg-muted/30 px-3 py-2.5 text-sm sm:flex-row sm:items-center sm:justify-between"
-            >
-              <span className="shrink-0">{resource.label}</span>
-              <code className="flex min-w-0 items-center gap-1 truncate font-mono text-xs text-muted-foreground">
-                <span className="truncate">{resource.path}</span>
-                <ExternalLink className="h-3 w-3 shrink-0 opacity-50" />
-              </code>
-            </div>
-          ))}
+          {DOC_RESOURCES.map((resource) => {
+            const url = repoDocUrl(resource.path);
+            return (
+              <button
+                key={resource.path}
+                type="button"
+                onClick={() => void openExternalUrl(url)}
+                className={cn(
+                  "flex min-w-0 cursor-pointer flex-col gap-1 rounded-lg border bg-muted/30 px-3 py-2.5 text-left text-sm transition-colors",
+                  "hover:border-muted-foreground/30 hover:bg-muted/60",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  "sm:flex-row sm:items-center sm:justify-between",
+                )}
+              >
+                <span className="shrink-0">{resource.label}</span>
+                <code className="flex min-w-0 items-center gap-1 truncate font-mono text-xs text-muted-foreground">
+                  <span className="truncate">{resource.path}</span>
+                  <ExternalLink className="h-3 w-3 shrink-0 opacity-50" />
+                </code>
+              </button>
+            );
+          })}
         </CardContent>
       </Card>
     </div>
